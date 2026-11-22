@@ -101,6 +101,7 @@ def launch() -> None:
         ) from exc
     if not _has_webview2():
         raise RuntimeError("Installiere die Microsoft Edge WebView2 Runtime, um finamt zu öffnen.")
+    from finamt.agents.local_llama import close_local_model
 
     with _local_workspace() as url:
         webview.settings["ALLOW_DOWNLOADS"] = True
@@ -120,3 +121,5 @@ def launch() -> None:
             raise RuntimeError(
                 "Das Fenster konnte nicht geöffnet werden. Prüfe die Microsoft Edge WebView2 Runtime."
             ) from exc
+        finally:
+            close_local_model()

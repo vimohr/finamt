@@ -1,6 +1,11 @@
 name: Windows installer
 on:
   workflow_dispatch:
+    inputs:
+      with_ai:
+        description: Verify the optional model download and local inference
+        type: boolean
+        default: false
   push:
     branches: [feature/einkommensteuer-installer]
 
@@ -28,6 +33,12 @@ jobs:
         run: |
           $setup = Get-ChildItem dist/windows/*-setup.exe | Select-Object -First 1
           ./scripts/windows/test_install.ps1 -Installer $setup.FullName
+      - name: Verify optional AI setup and local inference
+        if: github.event_name == 'push' || inputs.with_ai
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist/windows/*-setup.exe | Select-Object -First 1
+          ./scripts/windows/test_install.ps1 -Installer $setup.FullName -WithAI
       - uses: actions/upload-artifact@v4
         with:
           name: finamt-windows-x64-setup

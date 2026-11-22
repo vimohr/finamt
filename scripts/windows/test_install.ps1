@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Installer,
-    [switch]$CheckWindow
+    [switch]$CheckWindow,
+    [switch]$WithAI
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,7 +14,8 @@ $setup = (Resolve-Path -LiteralPath $Installer).Path
 $testRoot = Join-Path $env:LOCALAPPDATA ("finamt-test-" + [guid]::NewGuid().ToString("N"))
 $window = $null
 try {
-    $installed = Start-Process -FilePath $setup -ArgumentList "/S /D=$testRoot" -Wait -PassThru
+    $options = if ($WithAI) { "/S /WITHAI /D=$testRoot" } else { "/S /D=$testRoot" }
+    $installed = Start-Process -FilePath $setup -ArgumentList $options -Wait -PassThru
     if ($installed.ExitCode -ne 0) { throw "Installer exit code $($installed.ExitCode)" }
     $entry = Get-ItemProperty -LiteralPath $uninstallKey
     if ($entry.InstallLocation -ne $testRoot) { throw "Unexpected installation directory" }
@@ -26,6 +28,8 @@ try {
 from pathlib import Path
 from sys import argv
 from urllib.request import urlopen
+import json
+from finamt.agents import llm_backend, local_llama, model_assets
 from finamt.tax.est import EmployeeCase, draft_annual_return
 from finamt.ui.desktop import _local_workspace
 
@@ -39,10 +43,25 @@ with _local_workspace() as url:
         with urlopen(url + suffix, timeout=5) as response:
             assert expected in response.read()
 print("Installed Windows runtime, tax example and UI endpoints verified")
+
+model_directory = Path(argv[1]).parents[1] / "modell"
+with_ai = argv[2] == "with-ai"
+assert model_assets.configure_installed_model(model_directory) == with_ai
+if with_ai:
+    try:
+        output = llm_backend.generate(
+            'Gib genau dieses JSON aus: {"betrag":"18.35"}',
+            model_assets.MODEL_ALIAS, max_tokens=32, json_object=True,
+        )
+        assert json.loads(output) == {"betrag": "18.35"}
+        print("Installed Qwen model returned the expected local JSON on Windows")
+    finally:
+        local_llama.close_local_model()
 '@
     $probeFile = Join-Path $testRoot "probe.py"
     Set-Content -LiteralPath $probeFile -Value $probe -Encoding utf8
-    & $python $probeFile $release
+    $mode = if ($WithAI) { "with-ai" } else { "base" }
+    & $python $probeFile $release $mode
     if ($LASTEXITCODE -ne 0) { throw "Installed finamt failed its smoke test" }
 
     if ($CheckWindow) {

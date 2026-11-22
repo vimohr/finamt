@@ -10,6 +10,7 @@ Models are downloaded automatically on first use and cached in
 ~/.cache/huggingface/hub.  No setup required.
 
 Supported short-names (pass exactly these as model= in config):
+  finamt-local                    ← optional Windows model from setup
   mistral:7b                      ← recommended default
   qwen2.5:7b-instruct-q4_K_M     ← alternative
 
@@ -21,6 +22,8 @@ from __future__ import annotations
 import platform
 import sys
 from typing import Any
+
+from .model_assets import MODEL_ALIAS
 
 # ---------------------------------------------------------------------------
 # Platform detection
@@ -128,6 +131,7 @@ def generate(
     temperature: float = 0.0,
     top_p: float = 1.0,
     max_tokens: int = 1024,
+    json_object: bool = False,
 ) -> str:
     """
     Generate text from *prompt* using the local backend appropriate for this platform.
@@ -139,11 +143,22 @@ def generate(
     temperature: Sampling temperature.  0.0 = greedy / deterministic.
     top_p:       Nucleus sampling threshold.
     max_tokens:  Maximum number of *new* tokens to generate.
+    json_object: Ask the installed Windows runtime for a JSON object.
 
     Returns
     -------
     The generated text string (assistant reply only, no prompt echo).
     """
+    if model_name == MODEL_ALIAS:
+        from . import local_llama
+
+        return local_llama.generate(
+            prompt,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            json_object=json_object,
+        )
     repo_id = _resolve(model_name)
 
     if _IS_APPLE_SILICON:
