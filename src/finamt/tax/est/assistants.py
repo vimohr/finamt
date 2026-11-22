@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from decimal import Decimal
 from threading import Lock
 from typing import Literal
@@ -76,7 +77,9 @@ def model_settings() -> dict:
 def _structured_reply(model: str, prompt: str, response_type: type[StrictResponse]):
     try:
         with _MODEL_LOCK:
-            raw = llm_backend.generate(prompt, model, max_tokens=650, json_object=True)
+            raw = llm_backend.generate(
+                prompt, model, max_tokens=650, response_schema=response_type.model_json_schema()
+            )
         return response_type.model_validate_json(clean_json_response(raw))
     except Exception:
         # Documents and model output may contain tax data. Do not log either here.
@@ -129,6 +132,7 @@ def guide(
         "übernimm das kurze wörtliche Zitat mit Betrag und Kontext in quote. Verwende "
         "selected_document als source.document und page als source.page. Bei null in page "
         "handelt es sich um einen Textbeleg ohne Seitennummer. Frage nicht nach der Beleg-ID. "
+        "Bei Fortbildung lautet collection=expenses und facts.category=training. "
         "Wenn ein benötigtes Datum oder ein Betrag fehlt, setze candidate=null. Gib nur JSON der Form "
         '{"reply": "Eine kurze Frage?", "candidate": {"collection": "expenses|donations|insurance_payments", "facts": {...}, "quote": null}} aus. '
         "Geldwerte sind Dezimalstrings mit Punkt. Schemata:\n"
@@ -141,9 +145,13 @@ def guide(
         return {**fallback, "agent": "unavailable"}
     candidate = None
     if reply.candidate and document:
+        raw_facts = reply.candidate.facts.copy()
+        amount = raw_facts.get("amount")
+        if isinstance(amount, str) and re.fullmatch(r"[0-9]+,[0-9]{2}", amount):
+            raw_facts["amount"] = amount.replace(",", ".")
         try:
             facts = candidates[reply.candidate.collection].model_validate_json(
-                json.dumps(reply.candidate.facts)
+                json.dumps(raw_facts)
             )
         except ValidationError:
             pass
@@ -153,7 +161,11 @@ def guide(
                     candidate = _sourced_candidate(reply.candidate, facts, excerpt, page)
     question = reply.reply.strip()
     if not question.endswith("?") or question.count("?") != 1 or "\n" in question:
-        question = fallback["reply"]
+        question = (
+            "Stimmen die vorgeschlagenen Angaben mit dem Beleg überein?"
+            if candidate
+            else fallback["reply"]
+        )
     return {"reply": question, "candidate": candidate, "agent": "local_model"}
 
 

@@ -84,14 +84,15 @@ def test_installed_alias_uses_local_auth_and_requests_json(monkeypatch, tmp_path
             monkeypatch.setattr(local_llama, "_runtime", runtime)
             monkeypatch.setattr(local_llama, "installed_paths", lambda _: (tmp_path, tmp_path))
             monkeypatch.setenv(model_assets.MODEL_DIRECTORY_ENV, str(tmp_path))
+            schema = {"type": "object", "properties": {"betrag": {"type": "string"}}}
             raw = llm_backend.generate(
-                "Fiktiver Beleg", "finamt-local", max_tokens=32, json_object=True
+                "Fiktiver Beleg", "finamt-local", max_tokens=32, response_schema=schema
             )
             assert json.loads(raw) == {"betrag": "18.35"}
             [(path, authorization, payload)] = exchanges
             assert path == "/v1/chat/completions"
             assert authorization == "Bearer test-local-key"
-            assert payload["response_format"] == {"type": "json_object"}
+            assert payload["response_format"] == {"type": "json_schema", "schema": schema}
             assert payload["cache_prompt"] is False
             local_llama.close_local_model()
             process.terminate.assert_called_once()

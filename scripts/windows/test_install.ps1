@@ -49,9 +49,10 @@ with_ai = argv[2] == "with-ai"
 assert model_assets.configure_installed_model(model_directory) == with_ai
 if with_ai:
     try:
+        schema = {"type": "object", "properties": {"betrag": {"type": "string"}}, "required": ["betrag"], "additionalProperties": False}
         output = llm_backend.generate(
             'Gib genau dieses JSON aus: {"betrag":"18.35"}',
-            model_assets.MODEL_ALIAS, max_tokens=32, json_object=True,
+            model_assets.MODEL_ALIAS, max_tokens=32, response_schema=schema,
         )
         assert json.loads(output) == {"betrag": "18.35"}
         print("Installed Qwen model returned the expected local JSON on Windows")

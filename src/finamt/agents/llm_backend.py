@@ -131,7 +131,7 @@ def generate(
     temperature: float = 0.0,
     top_p: float = 1.0,
     max_tokens: int = 1024,
-    json_object: bool = False,
+    response_schema: dict[str, Any] | None = None,
 ) -> str:
     """
     Generate text from *prompt* using the local backend appropriate for this platform.
@@ -143,7 +143,7 @@ def generate(
     temperature: Sampling temperature.  0.0 = greedy / deterministic.
     top_p:       Nucleus sampling threshold.
     max_tokens:  Maximum number of *new* tokens to generate.
-    json_object: Ask the installed Windows runtime for a JSON object.
+    response_schema: Constrain the installed Windows runtime's JSON reply to this schema.
 
     Returns
     -------
@@ -157,7 +157,7 @@ def generate(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
-            json_object=json_object,
+            response_schema=response_schema,
         )
     repo_id = _resolve(model_name)
 

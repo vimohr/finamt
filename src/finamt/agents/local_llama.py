@@ -129,7 +129,7 @@ def close_local_model() -> None:
 
 
 def generate(
-    prompt: str, *, temperature: float, top_p: float, max_tokens: int, json_object: bool
+    prompt: str, *, temperature: float, top_p: float, max_tokens: int, response_schema: dict | None
 ) -> str:
     global _runtime
     location = os.environ.get(MODEL_DIRECTORY_ENV)
@@ -155,8 +155,8 @@ def generate(
         "max_tokens": max_tokens,
         "cache_prompt": False,
     }
-    if json_object:
-        payload["response_format"] = {"type": "json_object"}
+    if response_schema is not None:
+        payload["response_format"] = {"type": "json_schema", "schema": response_schema}
     code, result = runtime.request("POST", "/v1/chat/completions", timeout=180, payload=payload)
     if code != 200:
         raise RuntimeError(f"Das lokale Modell hat die Anfrage abgelehnt (HTTP {code}).")

@@ -299,7 +299,7 @@ def test_document_guide_accepts_only_a_cited_original_amount(monkeypatch):
             "facts": {
                 "category": "training",
                 "description": "Fachkurs",
-                "amount": "1120.00",
+                "amount": "1120,00",
                 "paid_on": "2025-04-08",
                 "source": {"document": "kurs", "locator": "Eingabe des Modells"},
             },
