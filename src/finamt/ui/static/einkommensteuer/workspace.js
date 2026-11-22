@@ -102,6 +102,7 @@ let intakeCatalogue = null;
 let proposal = null;
 let proposalVersion = null;
 let wageEdit = null;
+let workdayProposal = [];
 let draft = null;
 let revision = 0;
 let walkthrough = [];
@@ -170,8 +171,14 @@ async function run(control, action) {
   }
 }
 
+function resetWorkdayImport() {
+  workdayProposal = [];
+  el("workday-import-preview").hidden = true;
+}
+
 function changed() {
   revision += 1;
+  resetWorkdayImport();
   draft = null;
   el("review-output").hidden = true;
   el("save-draft").disabled = true;
@@ -189,7 +196,10 @@ function renderOriginals() {
     const selected = select.value;
     select.replaceChildren(new Option("Beleg auswählen", ""));
     for (const [id, info] of Object.entries(taxCase.documents)) {
-      if (originalFiles.has(id)) select.add(new Option(info.path, id));
+      const file = originalFiles.get(id);
+      if (file && (!select.hasAttribute("data-csv-only") || /\.csv$/i.test(file.name))) {
+        select.add(new Option(info.path, id));
+      }
     }
     select.value = originalFiles.has(selected) ? selected : "";
   }
@@ -695,6 +705,39 @@ onForm("payroll-edit", (form) => {
   add("wage_certificates", wage);
   form.hidden = true;
   notify("Lohnsteuerbescheinigung übernommen.");
+});
+
+el("workday-import").elements.document.addEventListener("change", resetWorkdayImport);
+onForm("workday-import", async (form) => {
+  resetWorkdayImport();
+  const id = formValue(form, "document");
+  const file = originalFiles.get(id);
+  if (!file) throw new Error("Wähle zuerst den Arbeitskalender aus.");
+  const before = revision;
+  const body = new FormData();
+  body.append("file", file);
+  body.append("document", id);
+  const result = await request("workdays", {method: "POST", body});
+  if (before !== revision || formValue(form, "document") !== id) return;
+  if (result.sha256 !== taxCase.documents[id].sha256) throw new Error("Die CSV passt nicht zum Originalbeleg.");
+  const existing = new Set((taxCase.workdays ?? []).map((entry) => entry.day));
+  const duplicate = result.workdays.find((entry) => existing.has(entry.day));
+  if (duplicate) throw new Error("Der Arbeitstag " + duplicate.day + " ist bereits erfasst.");
+  workdayProposal = result.workdays;
+  const attended = workdayProposal.filter((entry) => entry.attended_first_workplace).length;
+  const atHome = workdayProposal.filter((entry) => entry.home_work === "predominantly").length;
+  el("workday-import-counts").textContent = `${workdayProposal.length} Tage insgesamt · ${attended} mit Besuch der ersten Tätigkeitsstätte · ${atHome} überwiegend im Homeoffice`;
+  el("workday-import-preview").hidden = false;
+});
+el("workday-import-original").addEventListener("click", () => {
+  if (workdayProposal.length) viewOriginal(workdayProposal[0].sources[0].document);
+});
+el("workday-import-confirm").addEventListener("click", () => {
+  if (!workdayProposal.length) return;
+  const count = workdayProposal.length;
+  (taxCase.workdays ??= []).push(...workdayProposal);
+  changed();
+  notify(count + " Arbeitstage übernommen.");
 });
 
 onForm("workday", (form) => {

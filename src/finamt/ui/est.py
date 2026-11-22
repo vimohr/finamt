@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, ValidationError
 from starlette.concurrency import run_in_threadpool
 
@@ -20,6 +21,7 @@ from finamt.tax.est.assistants import (
 )
 from finamt.tax.est.extraction import document_excerpt, propose_wage_certificate
 from finamt.tax.est.intake_2025 import Intake2025, catalogue, check_intake
+from finamt.tax.est.workday_csv_2025 import parse_workdays, workday_csv_template
 
 router = APIRouter(prefix="/einkommensteuer", tags=["Einkommensteuer"])
 _ASSETS = Path(__file__).parent / "static" / "einkommensteuer"
@@ -86,6 +88,32 @@ async def payroll(
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/arbeitskalender-2025.csv", include_in_schema=False)
+def workday_template():
+    return PlainTextResponse(workday_csv_template(), media_type="text/csv")
+
+
+@router.post("/api/workdays")
+async def workdays(
+    file: Annotated[UploadFile, File()],
+    document: Annotated[str, Form(pattern=r"^[A-Za-z0-9_-]+$")],
+):
+    if Path(file.filename or "").suffix.lower() != ".csv":
+        raise HTTPException(422, "Wähle einen Arbeitskalender im CSV-Format aus.")
+    data = await _read_original(file)
+    try:
+        days = await run_in_threadpool(parse_workdays, data, document)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return JSONResponse(
+        {
+            "workdays": [day.model_dump(mode="json", exclude_none=True) for day in days],
+            "sha256": sha256(data).hexdigest(),
+        },
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 class GuideRequest(BaseModel):

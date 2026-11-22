@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -180,6 +181,93 @@ def test_intake_screen_and_salary_mismatch_block_the_complete_assessment(synthet
         assert discrepancy["assessment"] is None
         assert discrepancy["review"]["status"] == "clarification_needed"
         assert "taxable_income" not in discrepancy["trace"]
+
+
+def test_calendar_import_integrates_with_review_and_keeps_csv_line(synthetic_pdf):
+    with TestClient(app) as client:
+        header = client.get("/einkommensteuer/arbeitskalender-2025.csv").content
+        csv = (
+            header
+            + (
+                "2025-01-02;ja;nein;nein\r\n"
+                "\r\n"
+                "2025-01-03;nein;überwiegend;nein\r\n"
+                "2025-01-06;ja;teilweise;ja\r\n"
+            ).encode()
+        )
+        response = client.post(
+            "/einkommensteuer/api/workdays",
+            data={"document": "kalender"},
+            files={"file": ("kalender.csv", csv, "text/csv")},
+        )
+        assert response.status_code == 200
+        imported = response.json()
+        assert imported["sha256"] == sha256(csv).hexdigest()
+        assert imported["workdays"][1] == {
+            "day": "2025-01-03",
+            "attended_first_workplace": False,
+            "home_work": "predominantly",
+            "permanently_without_other_workplace": False,
+            "sources": [{"document": "kalender", "locator": "Zeile 4"}],
+        }
+        case = _web_case(propose_wage_certificate(synthetic_pdf, "lohn.pdf", 2025))
+        case["documents"]["kalender"] = {"path": "kalender.csv", "sha256": imported["sha256"]}
+        route = b"21,70 km einfache Entfernung mit eigenem Pkw"
+        case["documents"]["strecke"] = {"path": "strecke.txt", "sha256": sha256(route).hexdigest()}
+        case["workdays"] = imported["workdays"]
+        case["commute"] = {
+            "distance_km": "21.70",
+            "mode": "own_or_provided_car",
+            "source": {"document": "strecke", "locator": "Zeile 1"},
+        }
+        originals = [
+            (
+                "originals",
+                (case["wage_certificates"][0]["document"], synthetic_pdf, "application/pdf"),
+            ),
+            ("originals", ("kalender", csv, "text/csv")),
+            ("originals", ("strecke", route, "text/plain")),
+        ]
+        reviewed = client.post(
+            "/einkommensteuer/api/preview", data={"case_json": json.dumps(case)}, files=originals
+        )
+        assert reviewed.status_code == 200
+        trace = reviewed.json()["trace"]
+        assert trace["commute_days"]["value"] == 2
+        assert trace["home_office_deduction"]["value"] == "12.00"
+        assert any(
+            entry.get("sources") == [{"document": "kalender", "locator": "Zeile 4"}]
+            for entry in trace.values()
+        )
+        originals[1] = ("originals", ("kalender", csv + b"\n", "text/csv"))
+        tampered = client.post(
+            "/einkommensteuer/api/preview", data={"case_json": json.dumps(case)}, files=originals
+        )
+        assert tampered.status_code == 422
+        assert "SHA-256 mismatch" in tampered.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("rows", "message"),
+    [
+        ("", "keine Arbeitstage"),
+        ("2025-02-29;ja;nein;nein\n", "gültiges Datum"),
+        ("2026-01-02;ja;nein;nein\n", "Datum aus 2025"),
+        ("2025-01-02;ja;vielleicht;nein\n", "Für Homeoffice"),
+        ("2025-01-02;ja;nein\n", "vier Spalten"),
+        ("2025-01-02;ja;nein;nein\n" * 2, "Zeile 3 erneut"),
+    ],
+)
+def test_calendar_import_rejects_invalid_rows_instead_of_partially_importing(rows, message):
+    with TestClient(app) as client:
+        header = client.get("/einkommensteuer/arbeitskalender-2025.csv").content
+        response = client.post(
+            "/einkommensteuer/api/workdays",
+            data={"document": "kalender"},
+            files={"file": ("kalender.csv", header + rows.encode(), "text/csv")},
+        )
+        assert response.status_code == 422
+        assert message in response.json()["detail"]
 
 
 def test_extraction_does_not_accept_unrelated_or_incomplete_content():

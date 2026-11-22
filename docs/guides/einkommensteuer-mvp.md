@@ -42,6 +42,8 @@ Starte `uv run finamt serve --no-browser` und öffne [die lokale Fallansicht](ht
 3. Bestätige das Profil für den Hauptvordruck und erstelle die Vorschau. Die Regelprüfung gleicht die Lohnpositionen erneut mit lesbaren PDFs ab. Bei einer Abweichung bleibt die Abschlussbestätigung gesperrt. Offene Fragen und manuelle Prüfpunkte stehen neben der Übersicht.
 4. Gehe Arbeitslohn, Werbungskosten, Jahresschätzung und Anlagen durch. **Prüfen** öffnet Rechenweg und Fundstellen. Nach dem Durchgang kannst du die Übersicht bestätigen und den Prüfentwurf als JSON speichern. Speichere die Falldatei und die Originale separat, um später weiterzuarbeiten. Die Anwendung speichert diese Dateien nicht dauerhaft auf dem Server.
 
+Unter **Ausgaben und Arbeitstage** kannst du einen Arbeitskalender für 2025 als CSV übernehmen. Lade die Vorlage herunter, speichere sie als UTF-8 mit Semikolon als Trennzeichen und füge sie unter **Belege** hinzu. Prüfe die Anzahl der Tage und öffne bei Bedarf den Kalender, bevor du die Einträge übernimmst. Jeder Tag verweist auf seine CSV-Zeile. Doppelte Datumsangaben und ungültige Zeilen stoppen den Import. Trage zusätzlich die bestätigte Pendelstrecke ein, wenn der Kalender Besuche an der ersten Tätigkeitsstätte enthält.
+
 Für Rückfragen und Belegvorschläge kannst du ein lokales Sprachmodell einschalten. Ein zweites Modell kann bestätigte Zahlen und ausgewählte Belegauszüge in einem separaten Aufruf prüfen. Es erhält den Erfassungsdialog nicht und stellt Rückfragen. Die Modellgewichte können beim ersten Aufruf heruntergeladen werden. Eingaben und Inferenz bleiben lokal.
 
 ```bash
@@ -82,6 +84,21 @@ Fragebogen `2025.1` klärt Wohnsitz, Veranlagungsart, Kinder, Auslandsbezug, wei
 Die Fallansicht und die CLI wenden dieselbe Prüfung an. Offene Antworten, fehlende Bescheinigungen oder ein Sachverhalt ohne passenden Regelpfad lassen den Fall als Teilentwurf bestehen. Der Entwurf nennt den jeweiligen Grund. Originalbelege und bestätigte Beträge bleiben abrufbar. Ein neues Steuerjahr oder ein zusätzlicher Regelpfad braucht eigene Referenzfälle für Berechnungen, Grenzen und Belegzuordnung.
 
 Der Altersentlastungsbetrag ist im unterstützten Arbeitnehmerprofil abgedeckt. Das Jahresregelwerk leitet Prozentsatz und Höchstbetrag aus dem bestätigten Geburtsdatum ab und berechnet den Betrag aus dem regulären Bruttoarbeitslohn. [§ 24a EStG](https://www.gesetze-im-internet.de/estg/__24a.html)
+
+## Zeitvergleich mit WISO Steuer
+
+Erzeuge zwei fiktive Fälle aus ihren Originaldateien.
+
+```bash
+uv run python examples/einkommensteuer-2025/prepare_comparison.py vergleichsfaelle
+```
+
+| Fall | Unterlagen | Prüfpunkte |
+| --- | --- | --- |
+| `standardfall` | Lohnbescheinigung, Arbeitskalender, Pendelstrecke, Angaben zur Person und Steuersituation | 46.250,30 € Arbeitslohn, 160 Tage an der ersten Tätigkeitsstätte, 40 überwiegend im Homeoffice |
+| `belegfall` | Dieselben Unterlagen sowie Fortbildung, Arbeitgebererstattung, Dienstreise, Spende, Handwerkerrechnung und Kontoauszug | 265 € Fortbildung nach Erstattung, 44,80 € Reisekosten nach Erstattung, 150 € Spende, 350 € begünstigte Handwerkerkosten |
+
+Beginne in beiden Anwendungen mit einem leeren Fall und denselben Unterlagen. Erfasse aktive Bearbeitungszeit, Wartezeit, Korrekturen und fehlende Werte. Prüfe nach Abschluss die Beträge am jeweiligen Beleg. Halte Installationszeit und Modell-Download fest, wenn sie beim ersten Durchlauf anfallen. In finamt gehören die Fortbildungserstattung und die Fahrtkilometer derzeit in die erweiterten Angaben. Stoppe mit den fiktiven Daten vor dem Versand. Für einen Vergleich bis zur Abgabe zählt bei finamt auch die manuelle Übertragung aus dem Prüfentwurf. Der amtliche Datenabruf braucht einen eigenen Test mit vorher eingerichteter Berechtigung.
 
 ## CLI und Beispielfälle
 

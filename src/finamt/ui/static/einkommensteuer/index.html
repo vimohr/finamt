@@ -107,6 +107,20 @@
         <section data-sheet="expenses" hidden>
           <h2>Ausgaben und Arbeitstage</h2>
           <details open>
+            <summary>Arbeitskalender als CSV übernehmen</summary>
+            <form id="workday-import">
+              <p>Füge den Arbeitskalender unter <strong>Belege</strong> hinzu. Datum als JJJJ-MM-TT, Tätigkeitsstätte und Arbeitsplatz mit ja oder nein, Homeoffice mit nein, teilweise oder überwiegend.</p>
+              <a href="/einkommensteuer/arbeitskalender-2025.csv" download="arbeitskalender-2025.csv">CSV-Vorlage herunterladen</a>
+              <label>Arbeitskalender<select name="document" data-doc-select data-csv-only required></select></label>
+              <button type="submit">CSV prüfen</button>
+              <div id="workday-import-preview" hidden>
+                <p id="workday-import-counts" role="status"></p>
+                <button id="workday-import-original" type="button">Kalender ansehen</button>
+                <button id="workday-import-confirm" type="button">Arbeitstage übernehmen</button>
+              </div>
+            </form>
+          </details>
+          <details>
             <summary>Arbeitstag erfassen</summary>
             <form id="workday">
               <div class="split">
