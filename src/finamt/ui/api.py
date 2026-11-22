@@ -41,7 +41,7 @@ import tempfile
 import urllib.request
 from datetime import date
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 # Load .env from the project directory (or any parent) at import time
 try:
@@ -56,6 +56,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from finamt.ui.est import router as est_router
 
 # ---------------------------------------------------------------------------
 # finamt integration
@@ -174,6 +176,7 @@ app = FastAPI(
     version="0.2.0",
     license_info={"name": "MIT"},
 )
+app.include_router(est_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -818,7 +821,7 @@ def create_manual_receipt(
 @app.post("/receipts/upload/stream", tags=["receipts"])
 async def upload_receipt_stream(
     file: Annotated[UploadFile, File(description="Receipt PDF or image")],
-    receipt_type: str = Query(default="purchase", enum=["purchase", "sale"]),
+    receipt_type: Literal["purchase", "sale"] = Query(default="purchase"),
     db: str | None = Query(default=None, description="DB file path"),
     taxpayer_name: str | None = Query(default=None, description="Taxpayer's own name"),
     taxpayer_vat_id: str | None = Query(default=None, description="Taxpayer's own VAT ID"),
@@ -963,7 +966,7 @@ async def upload_receipt_stream(
 @app.post("/receipts/upload", status_code=status.HTTP_201_CREATED, tags=["receipts"])
 async def upload_receipt(
     file: Annotated[UploadFile, File(description="Receipt PDF or image")],
-    receipt_type: str = Query(default="purchase", enum=["purchase", "sale"]),
+    receipt_type: Literal["purchase", "sale"] = Query(default="purchase"),
     db: str | None = Query(default=None, description="DB file path"),
 ):
     if file.content_type not in ALLOWED_MIME_TYPES:
@@ -1010,7 +1013,7 @@ async def upload_receipt(
 
 @app.get("/receipts", tags=["receipts"])
 def list_receipts(
-    receipt_type: str | None = Query(default=None, alias="type", enum=["purchase", "sale"]),
+    receipt_type: Literal["purchase", "sale"] | None = Query(default=None, alias="type"),
     category: str | None = Query(default=None),
     quarter: int | None = Query(default=None, ge=1, le=4),
     year: int | None = Query(default=None, ge=2000, le=2100),

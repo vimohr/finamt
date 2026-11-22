@@ -13,19 +13,27 @@ from .models import SourceDocument, SourceLocation
 
 
 class CalculationTrace:
-    def __init__(self, documents: dict[str, SourceDocument], source_dir: Path) -> None:
+    def __init__(
+        self,
+        documents: dict[str, SourceDocument],
+        source_dir: Path | None = None,
+        *,
+        document_bytes: dict[str, bytes] | None = None,
+    ) -> None:
         self.documents = {key: document.model_dump() for key, document in sorted(documents.items())}
         self.entries: dict[str, dict] = {}
         self._page_counts: dict[str, int | None] = {}
         for key, document in documents.items():
-            path = source_dir / document.path
-            if not path.is_file():
+            if document_bytes is not None and key in document_bytes:
+                data = document_bytes[key]
+            elif source_dir is not None and (path := source_dir / document.path).is_file():
+                data = path.read_bytes()
+            else:
                 raise ValueError(f"Source document {key} is missing or is not a regular file")
-            data = path.read_bytes()
             if sha256(data).hexdigest() != document.sha256:
                 raise ValueError(f"SHA-256 mismatch for source document {key}")
             self._page_counts[key] = None
-            if path.suffix.lower() == ".pdf":
+            if Path(document.path).suffix.lower() == ".pdf" or data.startswith(b"%PDF-"):
                 try:
                     with fitz.open(stream=data, filetype="pdf") as pdf:
                         if pdf.needs_pass:
@@ -34,7 +42,7 @@ class CalculationTrace:
                 except (fitz.FileDataError, fitz.EmptyFileError) as exc:
                     raise ValueError(f"Source document {key} is not a readable PDF") from exc
 
-    def _entry(self, key: str, value: Decimal | int | date, unit: str) -> dict:
+    def _entry(self, key: str, value: Decimal | int | date | str, unit: str) -> dict:
         if key in self.entries:
             raise ValueError(f"Duplicate calculation trace key: {key}")
         if isinstance(value, Decimal):
@@ -48,7 +56,7 @@ class CalculationTrace:
     def fact(
         self,
         key: str,
-        value: Decimal | int | date,
+        value: Decimal | int | date | str,
         unit: str,
         sources: tuple[SourceLocation, ...],
         *,
@@ -94,3 +102,9 @@ class CalculationTrace:
     def result(self, key: str) -> dict:
         entry = self.entries[key]
         return {"value": entry["value"], "unit": entry["unit"], "trace": key}
+
+    def form_field(self, key: str, line: int, code: str | None = None) -> dict:
+        field = {"key": key, "line": line, **self.result(key)}
+        if code is not None:
+            field["kennzahl"] = code
+        return field

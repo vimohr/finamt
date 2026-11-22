@@ -1,0 +1,14 @@
+Synthetische Lohnsteuerbescheinigung für das Beispieljahr 2025
+Transferticket: BEISPIEL-2025-02
+Steuerklasse/Faktor: 1
+Nr. 1: 01.01.2025 bis 31.12.2025
+Nr. 3: 46.250,30 EUR Bruttoarbeitslohn
+Nr. 4: 7.842,10 EUR einbehaltene Lohnsteuer
+Nr. 5: 0,00 EUR Solidaritätszuschlag
+Nr. 6: 0,00 EUR Kirchensteuer
+Nr. 20: 7,00 EUR Verpflegungszuschüsse
+Nr. 22a: 4.301,28 EUR gesetzliche Rentenversicherung Arbeitgeber
+Nr. 23a: 4.301,28 EUR gesetzliche Rentenversicherung Arbeitnehmer
+Nr. 25: 4.010,00 EUR gesetzliche Krankenversicherung
+Nr. 26: 1.110,00 EUR gesetzliche Pflegeversicherung
+Nr. 27: 601,25 EUR Arbeitslosenversicherung

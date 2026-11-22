@@ -163,7 +163,9 @@ for path, result in results.items():
 
 ### Employee income tax preview (2025)
 
-Added in this fork on 2026-11-22. Run `finamt est examples/einkommensteuer-2025/fall.json` from the checkout to generate a sourced Anlage N preview. See the [implementation plan and input guide](docs/guides/einkommensteuer-mvp.md).
+Start `uv run finamt serve --no-browser` and open [the local income tax workspace](http://127.0.0.1:8000/einkommensteuer). Import your wage statements and supporting documents, confirm the extracted fields next to the originals, then review the calculated values and form lines. `FINAMT_EST_GUIDE_MODEL` and `FINAMT_EST_REVIEW_MODEL` can enable separate local models for intake and review.
+
+Run `uv run finamt est examples/einkommensteuer-2025/fall-vollstaendig.json` for a synthetic end-to-end example. The current scope is the 2025 single assessment of domestic employees without children or other income. The export is a review draft. See the [implementation plan and input guide](docs/guides/einkommensteuer-mvp.md).
 
 ## Configuration
 

@@ -15,7 +15,7 @@ Analysierter Upstream-Stand ist [`5718293`](https://github.com/spaceoctahedron/f
 
 ## Aufbau
 
-1. **Belege erfassen.** Das Original erhält beim Import einen SHA-256-Hash. Der Import hält pro Fakt den Originalbeleg und seine Fundstelle fest. OCR und LLM dürfen Vorschläge für Inhalte, Kategorien und Rückfragen liefern. Die prüfende Person bestätigt oder korrigiert die Vorschläge. Korrekturen erzeugen eine neue Revision mit derselben Originalreferenz oder mit einem Ersatzbeleg.
+1. **Belege erfassen.** Das Original erhält beim Import einen SHA-256-Hash. Der Fall hält pro Fakt den Originalbeleg und seine Fundstelle fest. OCR und Sprachmodelle liefern Vorschläge für Inhalte, Kategorien und Rückfragen. Die prüfende Person bestätigt oder korrigiert die Vorschläge. Änderungen an den Falldaten machen die bisherige Vorschau ungültig.
 2. **Fachregeln anwenden.** Der Jahresfall enthält ausschließlich bestätigte Fakten. Reine Python-Funktionen erzeugen Ergebnisse mit stabilen Regel-IDs, Fundstellen und Eingabewerten. Geldbeträge bleiben centgenau. Ein fehlender Sachverhalt wird als offen behandelt, wenn er für eine Berechnung nötig ist. Unbekannte Steuerjahre führen zu einem Fehler.
 3. **Felder abbilden.** Ein eigener, versionierter Adapter übernimmt Beträge und Eingabefakten aus dem Jahresfall. Das amtliche Formular dient der Vorschau. Für XML sind das amtliche ESt-Schema, die passende Datenartversion und deren Rundungs- und eDaten-Vorgaben maßgeblich. Der prüfbare Entwurf enthält durch Verweise den ganzen Rechenweg.
 4. **Erklärung abschließen.** Die Fallansicht zeigt fehlende Angaben, Grenzfälle und alle ausgehenden Werte. ERiC validiert das XML lokal. Die Testübermittlung läuft mit synthetischen Fällen. Eine produktive Sendung erfordert die ausdrückliche Freigabe des validierten Entwurfs. Dessen Hash, Schema und Transferbeleg werden im Projekt archiviert und bei einem erneuten Sendeversuch geprüft.
@@ -33,25 +33,46 @@ Analysierter Upstream-Stand ist [`5718293`](https://github.com/spaceoctahedron/f
 
 Die ESt-Schnittstelle und die Hersteller-ID für den Fork parallel zur Fachlogik über den ELSTER-Entwicklerzugang vorbereiten. Vor jeder Veröffentlichung ein Steuerjahr samt Quellenstand und Schema festlegen. Familienfälle mit Zusammenveranlagung und Kindern, Progression und Auslandsbezug sowie weitere Einkunftsarten folgen als eigene Erweiterungen. Bis dahin müssen betroffene Fälle im Abgabedialog offen ausgewiesen werden.
 
-## Anlage-N-Entwurf für 2025 ausprobieren
+## Geführter Fall für 2025
 
-Der synthetische [Beispielfall](../../examples/einkommensteuer-2025/fall.json) enthält eine Lohnsteuerbescheinigung, einen Arbeitskalender und einen Streckennachweis. Aus dem Checkout lässt er sich so ausführen.
+Starte `uv run finamt serve --no-browser` und öffne [die lokale Fallansicht](http://127.0.0.1:8000/einkommensteuer).
+
+1. Lade Lohnsteuerbescheinigungen, einen Arbeitskalender und weitere Nachweise. In **Originalbelege** kannst du jedes Original öffnen. Wähle bei PDF-Vorschlägen die betreffende Seite.
+2. Lies die Lohnsteuerbescheinigungen aus und bestätige die Positionen neben dem Original. Für Scans kannst du die lokale OCR einschalten. Die weiteren Formulare erfassen Arbeitstage, Ausgaben, Reisen, Vorsorge, Spenden und haushaltsnahe Leistungen. Fahrkarten, Fahrtkilometer, Erstattungen und Vorauszahlungen lassen sich in den erweiterten Angaben ergänzen.
+3. Bestätige das Profil für den Hauptvordruck und erstelle die Vorschau. Die Regelprüfung gleicht die Lohnpositionen erneut mit lesbaren PDFs ab. Bei einer Abweichung bleibt die Abschlussbestätigung gesperrt. Offene Fragen und manuelle Prüfpunkte stehen neben der Übersicht.
+4. Gehe Arbeitslohn, Werbungskosten, Jahresschätzung und Anlagen durch. **Prüfen** öffnet Rechenweg und Fundstellen. Nach dem Durchgang kannst du die Übersicht bestätigen und den Prüfentwurf als JSON speichern. Speichere die Falldatei und die Originale separat, um später weiterzuarbeiten. Die Anwendung speichert diese Dateien nicht dauerhaft auf dem Server.
+
+Für Rückfragen und Belegvorschläge kannst du ein lokales Sprachmodell einschalten. Ein zweites Modell kann bestätigte Zahlen und ausgewählte Belegauszüge in einem separaten Aufruf prüfen. Es erhält den Erfassungsdialog nicht und stellt Rückfragen. Die Modellgewichte können beim ersten Aufruf heruntergeladen werden. Eingaben und Inferenz bleiben lokal.
 
 ```bash
-uv run finamt est examples/einkommensteuer-2025/fall.json > anlage-n-entwurf.json
+FINAMT_EST_GUIDE_MODEL=mistral:7b \
+FINAMT_EST_REVIEW_MODEL=qwen2.5:7b-instruct-q4_K_M \
+uv run finamt serve --no-browser
 ```
 
-Für einen eigenen Fall die erfassten Werte mit den Originalen abgleichen und in `documents` deren Pfad und SHA-256-Hash hinterlegen. Relative Pfade werden vom Ordner der Falldatei aus aufgelöst. Ein PDF-Verweis braucht die Seitennummer ab 1 und eine Fundstelle. Bei anderen Dateien genügt eine eindeutige Textfundstelle. Geldbeträge und Entfernungen sind Zeichenketten mit Dezimalpunkt, etwa `"46250.30"` oder `"21.70"`. Leere Bescheinigungsfelder bleiben weg. Beträge mit Vorzeichen unter null liegen außerhalb des aktuellen Eingabeprofils.
+## CLI und Beispielfälle
 
-`reviewed_standard_case` bestätigt den Abgleich und den Umfang des Falls. Erfasst werden die Positionen 3–6 und 17–18 gültiger Lohnsteuerbescheinigungen einer Person für regulären inländischen Arbeitslohn. Identische Dateien und wiederholte Transfertickets werden abgewiesen. Bei Korrekturen die jeweils gültige Bescheinigung verwenden. Versorgungsbezüge, Entschädigungen, Lohnersatzleistungen, Korrekturen des Bruttoarbeitslohns und weitere Zeilen der Bescheinigung erfordern eine Erweiterung des Entwurfs.
+Der synthetische [erweiterte Beispielfall](../../examples/einkommensteuer-2025/fall-vollstaendig.json) enthält alle für die Jahresschätzung erforderlichen Angaben. Die [kleine Anlage-N-Variante](../../examples/einkommensteuer-2025/fall.json) enthält Arbeitslohn, Pendelstrecke und Homeoffice.
+
+```bash
+uv run finamt est examples/einkommensteuer-2025/fall-vollstaendig.json > pruefentwurf.json
+uv run finamt est-extract lohnsteuerbescheinigung.pdf
+uv run --extra dev pytest
+```
+
+In `documents` stehen Pfad und SHA-256-Hash jedes Originals. Relative Pfade werden vom Ordner der Falldatei aus aufgelöst. Ein PDF-Verweis braucht eine Seitennummer ab 1 und eine Fundstelle. Bei anderen Dateien genügt eine eindeutige Textfundstelle. Geldbeträge und Entfernungen sind Zeichenketten mit Dezimalpunkt, etwa `"46250.30"` oder `"21.70"`. Leere Bescheinigungsfelder bleiben weg.
+
+`reviewed_standard_case` bestätigt den Abgleich mit den Belegen. Erfasst werden die Positionen 3–6, 17–18, 20 und 22–27 gültiger Lohnsteuerbescheinigungen. Identische Dateien und wiederholte Transfertickets werden abgewiesen. Bei Korrekturen ist die gültige Bescheinigung maßgeblich. Versorgungsbezüge, Entschädigungen und Lohnersatzleistungen liegen außerhalb der Jahresschätzung.
 
 Erfasst werden eine Strecke zur ersten Tätigkeitsstätte und ein Verkehrsmittel für alle dort angegebenen Hin- und Rückfahrten. Ein Kalendertag wird einmal erfasst. `permanently_without_other_workplace` gilt, wenn für die Tätigkeit dauerhaft kein anderer Arbeitsplatz zur Verfügung steht. Bei zeitweise fehlendem Arbeitsplatz gelten die allgemeinen Bedingungen. Der aktuelle Fallumfang setzt voraus, dass für die erfassten Tage keine konkurrierenden Kosten für ein häusliches Arbeitszimmer oder Unterkunftskosten aus doppelter Haushaltsführung angesetzt werden. Öffentliche Fahrkartenkosten betreffen die bestätigten Zahlungen für Arbeitswege im Steuerjahr. Zuschüsse von Jobcenter oder Arbeitsagentur, Sammelbeförderung, halbe Wege und gemischte Strecken folgen in Etappe 2.
 
-`fields` enthält aus der Anlage N übernommene Zeilen und Kennzahlen für die Vorschau. `summary` enthält die Rechenergebnisse für den unterstützten Umfang. `trace` verbindet jeden Wert mit den verwendeten Eingaben und Regeln. Eine Fundstelle enthält die Beleg-ID, gegebenenfalls die Seite und das Feld oder die Textposition. Unter `documents` stehen Dateiname und geprüfter Hash. Berechnungsparameter verweisen auf ihre amtlichen Quellen. Angaben wie Fundstellen und Zahlwerte stammen aus der bestätigten Eingabe. Die CLI prüft die Datei- und Seitenreferenzen. Die automatische Extraktion, ESt 1 A und das ERiC-XML sind weitere Etappen.
+`forms` enthält die Vorschau der amtlichen Zeilen für Anlage N, ESt 1 A, Vorsorgeaufwand, Sonderausgaben sowie Haushaltsnahe Aufwendungen und bei Bedarf Sonstiges. `fields` bleibt die Liste der Zeilen aus Anlage N. `summary` enthält die Zwischenergebnisse, `assessment` die optionale Jahresschätzung. `trace` verbindet jeden Wert mit den verwendeten Eingaben und Jahresregeln. Die CLI prüft Hashes und Seitenreferenzen. Den zweiten Belegabgleich und die optionale Modellprüfung führt die Fallansicht aus.
 
-```bash
-uv run --extra dev pytest
-```
+## Grenzen des Stands
+
+Die Jahresschätzung deckt 2025 für eine in Deutschland wohnhafte Person ohne Kinder, mit Einzelveranlagung und ausschließlich regulärem inländischem Arbeitslohn ab. Unterstützt werden eine Pendelstrecke mit einem Verkehrsmittel, inländische Dienstreisen im dokumentierten Standardprofil und ein Versicherungsstatus für das ganze Jahr. Wechselnde Pendelstrecken, gemischte Verkehrsmittel, doppelte Haushaltsführung, Auslandssachverhalte, weitere Einkunftsarten und Zusammenveranlagung sind weitere Etappen.
+
+Die amtlichen Zeilennummern dienen der Sichtprüfung. Zur validierten ELSTER-Abgabe fehlen im Fork die ESt-Schnittstellenbeschreibung mit Datenartversion, die native ERiC-Testumgebung und die Abnahme mit synthetischen Referenzfällen. Der Entwurf bleibt bis dahin ein JSON-Export für die Prüfung.
 
 ## Quellen
 

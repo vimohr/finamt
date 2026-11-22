@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Einkommensteuer 2025 · finamt</title>
+  <link rel="stylesheet" href="/einkommensteuer/workspace.css">
+  <script src="/einkommensteuer/workspace.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">finamt</a>
+    <span>Veranlagungsjahr 2025</span>
+  </header>
+  <main>
+    <h1>Einkommensteuer</h1>
+    <nav id="steps" aria-label="Steuerfall">
+      <button type="button" data-step="documents" aria-current="step">Belege</button>
+      <button type="button" data-step="payroll">Arbeitslohn</button>
+      <button type="button" data-step="expenses">Ausgaben</button>
+      <button type="button" data-step="profile">Hauptvordruck</button>
+      <button type="button" data-step="review">Übersicht</button>
+    </nav>
+    <div class="desk">
+      <aside class="panel assistant" aria-labelledby="guide-heading">
+        <h2 id="guide-heading">Steuerassistent</h2>
+        <div id="conversation" class="conversation" role="log" aria-live="polite">
+          <p class="turn">Lade deine Lohnsteuerbescheinigung und die weiteren Belege hoch. Danach gehen wir die Angaben gemeinsam durch.</p>
+        </div>
+        <form id="ask">
+          <label for="message">Nachricht an den Assistenten</label>
+          <textarea id="message" name="message" rows="3" maxlength="1600" placeholder="Welche Unterlagen brauche ich?"></textarea>
+          <label for="chat-document">Beleg zur Nachricht</label>
+          <select id="chat-document" name="document" data-doc-select></select>
+          <label id="chat-page-option" for="chat-page" hidden>Seite im PDF</label>
+          <input id="chat-page" name="page" type="number" min="1" step="1" value="1" hidden>
+          <label class="checkbox" id="model-option" hidden><input type="checkbox" id="use-guide"> Lokales Sprachmodell verwenden</label>
+          <p id="model-hint" class="muted"></p>
+          <button class="action" type="submit">Senden</button>
+        </form>
+        <div class="buttons" id="candidate-controls" hidden>
+          <button id="candidate-original" type="button">Fundstelle ansehen</button>
+          <button id="accept-candidate" type="button">Vorschlag nach Prüfung übernehmen</button>
+        </div>
+      </aside>
+      <div class="panel sheets">
+        <div class="notice" id="notice" role="status" hidden></div>
+        <section data-sheet="documents">
+          <h2>Originalbelege</h2>
+          <p>Wähle die Dateien aus. Sie bleiben für diesen Fall im Browser verfügbar.</p>
+          <label class="file-picker" for="originals">PDFs, Bilder und Textbelege auswählen</label>
+          <input id="originals" type="file" accept=".pdf,.txt,.csv,.png,.jpg,.jpeg" multiple>
+          <ul id="documents" class="documents"></ul>
+          <details>
+            <summary>Vorhandenen Fall laden</summary>
+            <label for="case-file">Falldatei (JSON)</label>
+            <input id="case-file" type="file" accept=".json,application/json">
+            <p class="muted">Wähle danach auch die Originalbelege des Falls aus.</p>
+          </details>
+          <button type="button" class="action next" data-next="payroll">Zum Arbeitslohn</button>
+        </section>
+        <section data-sheet="payroll" hidden>
+          <h2>Lohnsteuerbescheinigungen</h2>
+          <form id="payroll-read">
+            <div class="split">
+              <label>Originalbeleg<select name="document" data-doc-select required></select></label>
+              <label class="checkbox"><input type="checkbox" name="ocr"> Scan mit lokaler OCR lesen</label>
+            </div>
+            <div class="buttons">
+              <button type="submit" class="action">Vorschlag aus PDF erstellen</button>
+              <button type="button" id="payroll-manual">Manuell erfassen</button>
+            </div>
+          </form>
+          <form id="payroll-edit" hidden>
+            <div class="buttons">
+              <h3 id="payroll-caption">Bescheinigung prüfen</h3>
+              <button type="button" id="payroll-original">Original ansehen</button>
+            </div>
+            <p id="payroll-notes" class="muted"></p>
+            <div class="split">
+              <label>Transferticket<input name="ticket" required></label>
+              <label>Bescheinigungszeitraum bis<input name="period" type="date" required></label>
+              <label>Steuerklasse<input name="tax_class" type="number" min="1" max="6" step="1" required></label>
+              <label>PDF-Seite<input name="page" type="number" min="1" step="1"></label>
+            </div>
+            <div id="wage-amounts" class="split"></div>
+            <button type="submit" class="action">Am Original geprüft und bestätigen</button>
+          </form>
+          <ul id="wages" class="documents"></ul>
+          <button type="button" class="action next" data-next="expenses">Zu den Ausgaben</button>
+        </section>
+        <section data-sheet="expenses" hidden>
+          <h2>Ausgaben und Arbeitstage</h2>
+          <details open>
+            <summary>Arbeitstag erfassen</summary>
+            <form id="workday">
+              <div class="split">
+                <label>Datum<input name="date" type="date" required></label>
+                <label>Arbeit zu Hause<select name="home"><option value="none">Keine</option><option value="partly">Teilweise</option><option value="predominantly">Überwiegend</option></select></label>
+                <label class="checkbox"><input name="attended" type="checkbox"> Erste Tätigkeitsstätte aufgesucht</label>
+                <label class="checkbox"><input name="exception" type="checkbox"> Dauerhaft kein anderer Arbeitsplatz</label>
+                <label>Beleg<select name="document" data-doc-select required></select></label>
+                <label>Fundstelle<input name="locator" required placeholder="z. B. Schichtplan, Zeile 6"></label>
+                <label>PDF-Seite<input name="page" type="number" min="1" step="1" value="1"></label>
+              </div>
+              <button type="submit">Arbeitstag übernehmen</button>
+            </form>
+          </details>
+          <details>
+            <summary>Pendelstrecke erfassen</summary>
+            <form id="commute">
+              <div class="split">
+                <label>Einfache Entfernung in km<input name="distance" inputmode="decimal" required></label>
+                <label>Verkehrsmittel<select name="mode"><option value="own_or_provided_car">Eigener oder überlassener Pkw</option><option value="public_transport">Öffentlicher Verkehr</option><option value="other">Anderes Verkehrsmittel</option></select></label>
+                <label>Beleg<select name="document" data-doc-select required></select></label>
+                <label>Fundstelle<input name="locator" required></label>
+                <label>PDF-Seite<input name="page" type="number" min="1" step="1" value="1"></label>
+              </div>
+              <button type="submit">Pendelstrecke übernehmen</button>
+            </form>
+          </details>
+          <details>
+            <summary>Ausgabe erfassen</summary>
+            <form id="expense">
+              <div class="split">
+                <label>Kategorie<select name="category" id="expense-category" required></select></label>
+                <label>Bezeichnung<input name="description" required></label>
+                <label>Betrag in Euro<input name="amount" inputmode="decimal" required></label>
+                <label>Bezahlt am<input name="date" type="date" required></label>
+                <label>Beleg<select name="document" data-doc-select required></select></label>
+                <label>Fundstelle<input name="locator" required></label>
+                <label>PDF-Seite<input name="page" type="number" min="1" step="1" value="1"></label>
+              </div>
+              <button type="submit">Ausgabe übernehmen</button>
+            </form>
+          </details>
+          <details>
+            <summary>Arbeitsmittel und Abschreibung</summary>
+            <form id="asset">
+              <div class="split">
+                <label>Arbeitsmittel<input name="description" required></label>
+                <label>Anschaffungsdatum<input name="date" type="date" required></label>
+                <label>Bruttopreis in Euro<input name="amount" inputmode="decimal" required></label>
+                <label>Enthaltene Umsatzsteuer in Euro<input name="vat" inputmode="decimal" required></label>
+                <label>Beruflicher Anteil in Prozent<input name="share" inputmode="decimal" required></label>
+                <label>Art<select name="kind"><option value="other">Sonstiges Arbeitsmittel</option><option value="digital">Computerhardware oder begünstigte Software</option></select></label>
+                <label>Nutzungsdauer in Jahren bei Abschreibung<input name="life" type="number" min="1" max="50"></label>
+                <label class="checkbox"><input name="independent" type="checkbox"> Selbstständig nutzbar</label>
+                <label>Originalbeleg<select name="document" data-doc-select required></select></label>
+                <label>Fundstelle für Betrag und Umsatzsteuer<input name="locator" required></label>
+                <label>PDF-Seite<input name="page" type="number" min="1" step="1" value="1"></label>
+                <label>Nachweis zu Nutzung und Nutzungsdauer<select name="usage_document" data-doc-select required></select></label>
+                <label>Fundstelle im Nachweis<input name="usage_locator" required></label>
+                <label>PDF-Seite im Nachweis<input name="usage_page" type="number" min="1" step="1" value="1"></label>
+              </div>
+              <button type="submit">Arbeitsmittel übernehmen</button>
+            </form>
+          </details>
+          <details>
+            <summary>Dienstreisetag und Mahlzeiten</summary>
+            <form id="trip">
+              <div class="split">
+                <label>Reisetag<input name="date" type="date" required></label>
+                <label>Art des Tages<select name="kind">
+                  <option value="day_trip">Auswärtstätigkeit ohne Übernachtung</option>
+                  <option value="arrival">Anreise mit Übernachtung</option>
+                  <option value="full_day">24 Stunden abwesend</option>
+                  <option value="departure">Abreise nach Übernachtung</option>
+                </select></label>
+                <label>Abwesenheit in Minuten bei Tagesreisen<input name="minutes" type="number" min="1" max="1439" value="481" required></label>
+                <label>Einsatzbeginn bei regelmäßiger Tätigkeit am selben Ort<input name="start" type="date"></label>
+                <label>Reiseabrechnung<select name="document" data-doc-select required></select></label>
+                <label>Fundstelle<input name="locator" required></label>
+                <label>PDF-Seite<input name="page" type="number" min="1" step="1" value="1"></label>
+              </div>
+              <fieldset>
+                <legend>Vom Arbeitgeber gestellte Mahlzeiten</legend>
+                <div class="split" id="meals"></div>
+              </fieldset>
+              <button type="submit">Dienstreisetag übernehmen</button>
+            </form>
+          </details>
+          <details>
+            <summary>Haushaltsnahe Dienstleistungen und Handwerker</summary>
+            <form id="household">
+              <div class="split">
+                <label>Art<select name="kind"><option value="service">Haushaltsnahe Dienstleistung</option><option value="craft">Handwerkerleistung</option><option value="minijob">Haushaltshilfe im Minijob</option></select></label>
+                <label>Leistung<input name="description" required></label>
+                <label>Bezahlt am<input name="date" type="date" required></label>
+                <label>Begünstigter Anteil in Euro<input name="amount" inputmode="decimal" required></label>
+                <label>Gesamtrechnung in Euro<input name="invoice" inputmode="decimal" required></label>
+                <label>Zahlungsart<select name="method"><option value="account">Zahlung auf das Konto des Dienstleisters</option><option value="cash">Barzahlung</option><option value="minijob_proof">Nachweis der Minijob-Zentrale</option></select></label>
+                <label>Rechnung<select name="document" data-doc-select required></select></label>
+                <label>Fundstelle der Rechnung<input name="locator" required></label>
+                <label>PDF-Seite der Rechnung<input name="page" type="number" min="1" step="1" value="1"></label>
+                <label>Zahlungsbeleg<select name="payment_document" data-doc-select required></select></label>
+                <label>Fundstelle der Zahlung<input name="payment_locator" required></label>
+                <label>PDF-Seite der Zahlung<input name="payment_page" type="number" min="1" step="1" value="1"></label>
+                <label class="checkbox"><input name="eu" type="checkbox"> Leistung im eigenen Haushalt in der EU oder im EWR</label>
+                <label class="checkbox"><input name="funded" type="checkbox"> Öffentliche Förderung</label>
+              </div>
+              <button type="submit">Leistung übernehmen</button>
+            </form>
+          </details>
+          <p id="expenses-count" class="muted"></p>
+          <p>In den erweiterten Angaben kannst du einzelne Einträge korrigieren, Erstattungen, Fahrkarten und gefahrene Kilometer ergänzen.</p>
+          <button type="button" class="action next" data-next="profile">Zum Hauptvordruck</button>
+        </section>
+        <section data-sheet="profile" hidden>
+          <h2>Hauptvordruck und Jahresschätzung</h2>
+          <p>Dieser Berechnungsumfang gilt für die Einzelveranlagung eines in Deutschland ansässigen Arbeitnehmers ohne Kinder und ohne andere Einkünfte.</p>
+          <form id="profile">
+            <div class="split">
+              <label>Vorname<input name="first_name" required></label>
+              <label>Nachname<input name="last_name" required></label>
+              <label>Geburtsdatum<input type="date" name="date_of_birth" required></label>
+              <label>Beruf<input name="occupation"></label>
+              <label>Straße<input name="street" required></label>
+              <label>Hausnummer<input name="house_number" required></label>
+              <label>Postleitzahl<input name="postcode" pattern="[0-9]{5}" required></label>
+              <label>Wohnort<input name="city" required></label>
+              <label>Steuer-ID<input name="tax_id" inputmode="numeric"></label>
+              <label>Steuernummer<input name="tax_number"></label>
+              <label>Finanzamt<input name="tax_office"></label>
+              <label>Deutsche IBAN<input name="iban"></label>
+              <label>Krankenversicherung<select name="insurance">
+                <option value="statutory_with_sick_pay">Gesetzlich mit Krankengeldanspruch</option>
+                <option value="statutory_without_sick_pay">Gesetzlich ohne Krankengeldanspruch</option>
+                <option value="private">Private Krankenversicherung</option>
+              </select></label>
+              <label>Kirchensteuer<select name="church">
+                <option value="none">Keine Mitgliedschaft</option>
+                <option value="EV:bavaria_baden_wuerttemberg">Evangelisch, Bayern oder Baden-Württemberg</option>
+                <option value="RK:bavaria_baden_wuerttemberg">Katholisch, Bayern oder Baden-Württemberg</option>
+                <option value="EV:other">Evangelisch, anderes Bundesland</option>
+                <option value="RK:other">Katholisch, anderes Bundesland</option>
+              </select></label>
+              <label>Beleg für diese Angaben<select name="document" data-doc-select required></select></label>
+              <label>Fundstelle<input name="locator" required></label>
+              <label>PDF-Seite<input name="page" type="number" min="1" step="1" value="1"></label>
+              <label class="checkbox"><input name="reviewed" type="checkbox" required> Standardfall sowie alle relevanten Angaben und Zahlungen geprüft</label>
+            </div>
+            <button class="action" type="submit">Angaben bestätigen</button>
+          </form>
+          <button type="button" class="next" data-next="review">Zur Übersicht</button>
+        </section>
+        <section data-sheet="review" hidden>
+          <h2>Übersicht und zweite Prüfung</h2>
+          <p>Der Assistent führt dich durch die berechneten Werte und die vorbereiteten Anlagen.</p>
+          <label class="checkbox" id="review-model-option" hidden><input type="checkbox" id="use-reviewer"> Zweites lokales Sprachmodell zur Prüfung einsetzen</label>
+          <div class="buttons">
+            <button type="button" class="action" id="calculate">Vorschau berechnen und prüfen</button>
+            <button type="button" id="save-draft" disabled>Prüfentwurf speichern</button>
+          </div>
+          <div id="review-output" aria-live="polite" hidden>
+            <h3>Prüfpunkte</h3>
+            <p id="review-agent" class="muted"></p>
+            <ul id="findings"></ul>
+            <label class="checkbox" id="acknowledge-findings" hidden><input type="checkbox" id="findings-reviewed"> Ich habe die Prüfpunkte mit meinen Belegen abgeglichen</label>
+            <h3 id="walk-heading"></h3>
+            <p id="walk-intro"></p>
+            <div id="walk-result"></div>
+            <div class="buttons">
+              <button type="button" id="walk-prev">Zurück</button>
+              <button type="button" class="action" id="walk-next">Weiter</button>
+              <button type="button" id="review-confirm" disabled>Übersicht als geprüft bestätigen</button>
+            </div>
+          </div>
+        </section>
+        <details id="advanced">
+          <summary>Erweiterte Angaben und Falldatei</summary>
+          <p>Hier kannst du alle Felder des lokalen Falls bearbeiten und sichern.</p>
+          <label for="case-json">Bestätigte Falldaten (JSON)</label>
+          <textarea id="case-json" rows="12" spellcheck="false"></textarea>
+          <div class="buttons">
+            <button type="button" id="apply-json">Bearbeitete Angaben übernehmen</button>
+            <button type="button" id="save-case">Falldatei speichern</button>
+          </div>
+        </details>
+      </div>
+    </div>
+  </main>
+  <dialog id="original-dialog">
+    <form method="dialog" class="dialog-header">
+      <h2 id="original-title">Originalbeleg</h2>
+      <button>Schließen</button>
+    </form>
+    <p id="original-location" class="muted"></p>
+    <div id="original-content"></div>
+  </dialog>
+</body>
+</html>

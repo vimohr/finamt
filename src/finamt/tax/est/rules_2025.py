@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from decimal import Context, Decimal, localcontext
 
+from .assessment_2025 import estimate, main_form
+from .deductions_2025 import household, insurance, special_expenses
+from .expenses_2025 import expense_totals, travel_totals
 from .models import EmployeeCase, WageCertificate
 from .provenance import CalculationTrace
 
@@ -48,10 +51,7 @@ _REIMBURSEMENT_FIELDS = {
 
 
 def _form_field(trace: CalculationTrace, key: str, line: int, code: str | None = None) -> dict:
-    field = {"key": key, "line": line, **trace.result(key)}
-    if code is not None:
-        field["kennzahl"] = code
-    return field
+    return trace.form_field(key, line, code)
 
 
 def _record_payroll(
@@ -277,13 +277,18 @@ def draft_2025(case: EmployeeCase, trace: CalculationTrace) -> dict:
         home_amount, home_fields = _calculate_home_office(
             trace, regular_home_days, special_home_days
         )
-        expenses = commute_amount + home_amount
+        claims, expense_fields = expense_totals(trace, case)
+        travel, travel_fields = travel_totals(trace, case)
+        claim_keys = ["work_equipment", "professional_association", "training", "other_work"]
+        expenses = (
+            commute_amount + home_amount + travel + sum((claims[key] for key in claim_keys), _ZERO)
+        )
         trace.derive(
             "supported_expenses",
             expenses,
             "EUR",
             "employment.sum_supported_expenses",
-            ["commute_deduction", "home_office_deduction"],
+            ["commute_deduction", "home_office_deduction", *claim_keys, "travel_deduction"],
         )
         trace.rule("rule.employee_allowance", _EMPLOYEE_ALLOWANCE, "EUR", _EMPLOYEE_ALLOWANCE_BASIS)
         deduction = max(expenses, min(gross, _EMPLOYEE_ALLOWANCE))
@@ -294,39 +299,85 @@ def draft_2025(case: EmployeeCase, trace: CalculationTrace) -> dict:
             "employment.compare_actual_to_allowance_limited_to_gross",
             ["supported_expenses", "gross_wages", "rule.employee_allowance"],
         )
+        income = gross - deduction
         trace.derive(
             "employment_income",
-            gross - deduction,
+            income,
             "EUR",
             "employment.subtract_deduction",
             ["gross_wages", "employment_deduction"],
         )
+        main_fields = main_form(trace, case.filing) if case.filing else []
+        insurance_values, insurance_fields = insurance(trace, case)
+        special, special_forms = special_expenses(trace, case, income, claims["initial_training"])
+        household_credit, household_fields, findings = household(trace, case)
+        assessment = (
+            estimate(trace, case, income, insurance_values, special, household_credit)
+            if case.filing
+            else None
+        )
+        if not case.filing:
+            findings.append(
+                {
+                    "code": "no_assessment_profile",
+                    "message": "Für eine Jahresschätzung fehlen die bestätigten Angaben im Hauptvordruck.",
+                }
+            )
+        if any(cert.unsupported_positions for cert in certificates):
+            findings.append(
+                {
+                    "code": "unsupported_payroll",
+                    "message": "Mindestens eine Lohnsteuerbescheinigung enthält Werte außerhalb dieses Entwurfs.",
+                }
+            )
+        anlage_n = sorted(
+            payroll_fields + commute_fields + home_fields + expense_fields + travel_fields,
+            key=lambda item: item["line"],
+        )
+        forms = {
+            "ESt 1 A": main_fields,
+            "Anlage N": anlage_n,
+            "Anlage Vorsorgeaufwand": insurance_fields,
+            **special_forms,
+            "Anlage Haushaltsnahe Aufwendungen": household_fields,
+        }
 
     return {
         "status": "draft",
         "form": "Anlage N",
         "tax_year": 2025,
-        "rules_version": "2025.1",
-        "form_mapping_version": "anlage-n-2025.1",
+        "rules_version": "2025.2",
+        "form_mapping_version": "est-forms-2025.2",
         "references": {
             "wage_certificate": _PAYROLL_FORM,
             "anlage_n_help": _ANLAGE_N_HELP,
             "anlage_n_form": _ANLAGE_N_FORM,
         },
         "documents": trace.documents,
-        "fields": sorted(
-            payroll_fields + commute_fields + home_fields, key=lambda item: item["line"]
-        ),
+        "fields": anlage_n,
+        "forms": {
+            name: sorted(fields, key=lambda field: field["line"])
+            for name, fields in forms.items()
+            if fields
+        },
         "summary": {
             key: trace.result(key)
             for key in (
                 "gross_wages",
                 "commute_deduction",
                 "home_office_deduction",
+                "work_equipment",
+                "training",
+                "professional_association",
+                "other_work",
+                "travel_deduction",
                 "supported_expenses",
                 "employment_deduction",
                 "employment_income",
             )
         },
+        "assessment": assessment,
+        "findings": findings,
+        "submission_status": "preview",
         "trace": trace.entries,
     }

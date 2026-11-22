@@ -516,7 +516,7 @@ def cmd_est(
         Path, typer.Argument(help="Reviewed employee case JSON with references to original documents.")
     ],
 ) -> None:
-    """Print a sourced Anlage N preview for a supported assessment year."""
+    """Print a sourced employee income tax preview."""
     from finamt.tax.est import EmployeeCase, draft_annual_return
 
     try:
@@ -526,6 +526,23 @@ def cmd_est(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(json.dumps(draft, ensure_ascii=False, indent=2))
+
+
+@app.command("est-extract")
+def cmd_est_extract(
+    pdf: Annotated[Path, typer.Argument(help="PDF of a wage certificate.")],
+    year: Annotated[int, typer.Option("--year", help="Assessment year.")] = 2025,
+    ocr: Annotated[bool, typer.Option("--ocr", help="Try local OCR on scanned pages.")] = False,
+) -> None:
+    """Propose entries from a wage certificate for review."""
+    from finamt.tax.est.extraction import propose_wage_certificate
+
+    try:
+        result = propose_wage_certificate(pdf.read_bytes(), pdf.name, year, allow_ocr=ocr)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 # ---------------------------------------------------------------------------

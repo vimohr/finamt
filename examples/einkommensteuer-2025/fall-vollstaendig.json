@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "tax_year": 2025,
+  "reviewed_standard_case": true,
+  "documents": {
+    "lohn": {
+      "path": "lohnsteuerbeleg-mit-vorsorge.txt",
+      "sha256": "4344301dac36b316f6cf1b67951eed521f9bc2a740faba1eb8a5b47bf5e7da50"
+    },
+    "kalender": {
+      "path": "arbeitskalender.txt",
+      "sha256": "246cd31c593f15ef97626afcf026bff1680ffa6fc18432ca5a96bba72d821545"
+    },
+    "strecke": {
+      "path": "streckennachweis.txt",
+      "sha256": "d9d62d64df68c70fd00ce6a2ca1677ff297bd72c67ac0659c31544d500d62156"
+    },
+    "weitere": {
+      "path": "weitere-belege.txt",
+      "sha256": "bbf2f0265af5b06de4252e0b1ccf5b18d43f840f96c35c6992e2eecf22ce84cc"
+    }
+  },
+  "wage_certificates": [
+    {
+      "document": "lohn",
+      "transfer_ticket": "BEISPIEL-2025-02",
+      "period_end": "2025-12-31",
+      "tax_class": 1,
+      "amounts": {
+        "3": "46250.30",
+        "4": "7842.10",
+        "5": "0.00",
+        "6": "0.00",
+        "20": "7.00",
+        "22a": "4301.28",
+        "23a": "4301.28",
+        "25": "4010.00",
+        "26": "1110.00",
+        "27": "601.25"
+      }
+    }
+  ],
+  "commute": {
+    "distance_km": "21.70",
+    "mode": "own_or_provided_car",
+    "source": {
+      "document": "strecke",
+      "locator": "Zeilen 2–3"
+    }
+  },
+  "workdays": [
+    {
+      "day": "2025-01-02",
+      "attended_first_workplace": true,
+      "home_work": "none",
+      "permanently_without_other_workplace": false,
+      "sources": [
+        {
+          "document": "kalender",
+          "locator": "Zeile 2 · 02.01."
+        }
+      ]
+    },
+    {
+      "day": "2025-01-03",
+      "attended_first_workplace": false,
+      "home_work": "predominantly",
+      "permanently_without_other_workplace": false,
+      "sources": [
+        {
+          "document": "kalender",
+          "locator": "Zeile 3 · 03.01."
+        }
+      ]
+    }
+  ],
+  "expenses": [
+    {
+      "category": "training",
+      "description": "Fachseminar",
+      "paid_on": "2025-04-10",
+      "amount": "390.00",
+      "source": {
+        "document": "weitere",
+        "locator": "A. Fortbildung"
+      }
+    }
+  ],
+  "work_assets": [
+    {
+      "description": "Laptop",
+      "acquired_on": "2025-03-20",
+      "amount": "1190.00",
+      "source": {
+        "document": "weitere",
+        "locator": "B. Arbeitsmittel"
+      },
+      "vat": {
+        "amount": "190.00",
+        "source": {
+          "document": "weitere",
+          "locator": "B. Arbeitsmittel"
+        }
+      },
+      "professional_percent": "65.00",
+      "usage_source": {
+        "document": "weitere",
+        "locator": "C. Nutzungsprotokoll"
+      },
+      "asset_kind": "digital",
+      "independently_usable": true
+    }
+  ],
+  "travel_days": [
+    {
+      "day": "2025-05-06",
+      "kind": "day_trip",
+      "absent_minutes": 600,
+      "source": {
+        "document": "weitere",
+        "locator": "D. Dienstreise, Abwesenheit"
+      }
+    }
+  ],
+  "travel_mileage": [
+    {
+      "day": "2025-05-06",
+      "driven_km": "126.00",
+      "vehicle": "private_car",
+      "source": {
+        "document": "weitere",
+        "locator": "D. Dienstreise, gefahrene Kilometer"
+      }
+    }
+  ],
+  "insurance_payments": [
+    {
+      "category": "liability_accident_term_life",
+      "paid_on": "2025-02-26",
+      "amount": "82.00",
+      "source": {
+        "document": "weitere",
+        "locator": "F. Versicherungsbescheinigung"
+      }
+    }
+  ],
+  "donations": [
+    {
+      "category": "charitable_domestic",
+      "paid_on": "2025-12-02",
+      "recipient": "Musterverein",
+      "amount": "150.00",
+      "source": {
+        "document": "weitere",
+        "locator": "E. Spendenbescheinigung"
+      }
+    }
+  ],
+  "household_costs": [
+    {
+      "category": "craft",
+      "description": "Reparatur",
+      "paid_on": "2025-08-18",
+      "amount": "350.00",
+      "source": {
+        "document": "weitere",
+        "locator": "G. Handwerkerrechnung, Arbeitskosten"
+      },
+      "invoice_total": {
+        "amount": "525.00",
+        "source": {
+          "document": "weitere",
+          "locator": "G. Handwerkerrechnung, Gesamtrechnung"
+        }
+      },
+      "payment_source": {
+        "document": "weitere",
+        "locator": "H. Kontoauszug"
+      },
+      "payment_method": "account",
+      "household_in_eu_eea": true,
+      "publicly_funded": false
+    }
+  ],
+  "filing": {
+    "taxpayer": {
+      "first_name": "Ada",
+      "last_name": "Muster",
+      "date_of_birth": "1985-04-03",
+      "street": "Musterstraße",
+      "house_number": "15",
+      "postcode": "12345",
+      "city": "Musterstadt",
+      "source": {
+        "document": "weitere",
+        "locator": "I. Fiktive Person"
+      }
+    },
+    "case_facts": {
+      "document": "weitere",
+      "locator": "J. Fallbestätigung"
+    },
+    "all_income_and_payments_reviewed": true,
+    "insurance": "statutory_with_sick_pay"
+  }
+}
