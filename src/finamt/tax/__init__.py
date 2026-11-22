@@ -7,12 +7,12 @@ Currently implemented:
   - ``UStVA``  — Umsatzsteuer-Voranmeldung (VAT pre-return)
   - ``USt``    — Umsatzsteuerjahreserklärung (E50, annual VAT return)
   - ``KSt``    — Körperschaftsteuererklärung (E30, corporate income tax)
+  - ``est``    — Anlage N preview for confirmed employee data (2025)
 
 Planned:
   - ``GewSt``     — Gewerbesteuer
   - ``JA``        — Jahresabschluss
   - ``eür``       — Einnahmen-Überschuss-Rechnung (EÜR / income-surplus statement)
-  - ``anlage_n``  — Anlage N (employment income)
 """
 
 from .kst import KStReport, generate_kst

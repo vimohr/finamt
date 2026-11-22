@@ -1,0 +1,10 @@
+Synthetische Lohnsteuerbescheinigung, Veranlagungsjahr 2025
+Transferticket: BEISPIEL-2025-01
+Steuerklasse/Faktor: 1
+Nr. 1: 01.01.2025 bis 31.12.2025
+Nr. 3: 46.250,30 EUR
+Nr. 4: 7.842,10 EUR
+Nr. 5: 0,00 EUR
+Nr. 6: 0,00 EUR
+Nr. 17: 0,00 EUR
+Nr. 18: 0,00 EUR

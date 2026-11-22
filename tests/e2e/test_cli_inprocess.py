@@ -6,6 +6,7 @@ In-process tests for FinamtCLI with FinanceAgent fully mocked.
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime
 from decimal import Decimal
@@ -479,6 +480,29 @@ class TestMain:
         result = runner.invoke(app, [])
         assert result.exit_code == 0
         assert "Usage" in result.output
+
+    def test_est_draft_from_example(self, mocker, monkeypatch, tmp_path):
+        case = Path(__file__).resolve().parents[2] / "examples/einkommensteuer-2025/fall.json"
+        monkeypatch.chdir(tmp_path)
+        agent = mocker.patch("finamt.cli.FinanceAgent")
+        result = runner.invoke(app, ["est", str(case)])
+
+        assert result.exit_code == 0
+        draft = json.loads(result.stdout)
+        assert draft["summary"]["commute_deduction"]["value"] == "6.38"
+        assert draft["summary"]["home_office_deduction"]["value"] == "6.00"
+        assert draft["summary"]["employment_income"]["value"] == "45020.30"
+        assert draft["trace"]["wage.lohn.3"]["sources"] == [{"document": "lohn", "locator": "Nr. 3"}]
+        agent.assert_not_called()
+
+    def test_est_invalid_input_fails_without_a_draft(self, tmp_path):
+        case = tmp_path / "fall.json"
+        case.write_text("{}", encoding="utf-8")
+        result = runner.invoke(app, ["est", str(case)])
+
+        assert result.exit_code == 1
+        assert result.stdout == ""
+        assert "wage_certificates" in result.stderr
 
     def test_single_receipt_dispatch(self, mocker, tmp_path):
         (tmp_path / "r.pdf").write_text("x")

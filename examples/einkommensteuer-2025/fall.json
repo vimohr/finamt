@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "tax_year": 2025,
+  "reviewed_standard_case": true,
+  "documents": {
+    "lohn": {
+      "path": "lohnsteuerbeleg.txt",
+      "sha256": "ea599c00c2febf1f64df5daf2e353cef5e76eb5bbf909c5844c0e5cba749b263"
+    },
+    "kalender": {
+      "path": "arbeitskalender.txt",
+      "sha256": "246cd31c593f15ef97626afcf026bff1680ffa6fc18432ca5a96bba72d821545"
+    },
+    "strecke": {
+      "path": "streckennachweis.txt",
+      "sha256": "d9d62d64df68c70fd00ce6a2ca1677ff297bd72c67ac0659c31544d500d62156"
+    }
+  },
+  "wage_certificates": [
+    {
+      "document": "lohn",
+      "transfer_ticket": "BEISPIEL-2025-01",
+      "period_end": "2025-12-31",
+      "tax_class": 1,
+      "amounts": {
+        "3": "46250.30",
+        "4": "7842.10",
+        "5": "0.00",
+        "6": "0.00",
+        "17": "0.00",
+        "18": "0.00"
+      }
+    }
+  ],
+  "commute": {
+    "distance_km": "21.70",
+    "mode": "own_or_provided_car",
+    "source": {
+      "document": "strecke",
+      "locator": "Zeilen 2–3"
+    }
+  },
+  "workdays": [
+    {
+      "day": "2025-01-02",
+      "attended_first_workplace": true,
+      "home_work": "none",
+      "permanently_without_other_workplace": false,
+      "sources": [{"document": "kalender", "locator": "Zeile 2 · 02.01."}]
+    },
+    {
+      "day": "2025-01-03",
+      "attended_first_workplace": false,
+      "home_work": "predominantly",
+      "permanently_without_other_workplace": false,
+      "sources": [{"document": "kalender", "locator": "Zeile 3 · 03.01."}]
+    }
+  ]
+}

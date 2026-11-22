@@ -161,6 +161,10 @@ for path, result in results.items():
         print(f"{path}: ERROR — {result.error_message}")
 ```
 
+### Employee income tax preview (2025)
+
+Added in this fork on 2026-11-22. Run `finamt est examples/einkommensteuer-2025/fall.json` from the checkout to generate a sourced Anlage N preview. See the [implementation plan and input guide](docs/guides/einkommensteuer-mvp.md).
+
 ## Configuration
 
 Settings are read in priority order from: environment variables → `.env` file → built-in defaults.

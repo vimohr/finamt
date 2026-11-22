@@ -506,6 +506,29 @@ def cmd_ustva(
 
 
 # ---------------------------------------------------------------------------
+# est sub-command
+# ---------------------------------------------------------------------------
+
+
+@app.command("est")
+def cmd_est(
+    case_file: Annotated[
+        Path, typer.Argument(help="Reviewed employee case JSON with references to original documents.")
+    ],
+) -> None:
+    """Print a sourced Anlage N preview for a supported assessment year."""
+    from finamt.tax.est import EmployeeCase, draft_annual_return
+
+    try:
+        case = EmployeeCase.model_validate_json(case_file.read_bytes())
+        draft = draft_annual_return(case, case_file.parent)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(draft, ensure_ascii=False, indent=2))
+
+
+# ---------------------------------------------------------------------------
 # serve sub-command
 # ---------------------------------------------------------------------------
 
