@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -15,6 +16,16 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = Path(__file__).resolve().parent
+
+
+def verify_example(example: Path) -> None:
+    cases = (example / "fall.json", example / "fall-vollstaendig.json")
+    for file in cases:
+        case = json.loads(file.read_text(encoding="utf-8"))
+        for source in case["documents"].values():
+            original = example / source["path"]
+            if sha256(original.read_bytes()).hexdigest() != source["sha256"]:
+                raise ValueError(f"The synthetic example's source hash changed: {original}")
 
 
 def build(output: Path, compiler: str) -> Path:
@@ -43,6 +54,7 @@ def build(output: Path, compiler: str) -> Path:
         )
         shutil.copy2(SCRIPTS / "launch.pyw", payload / "launch.pyw")
         shutil.copytree(ROOT / "examples" / "einkommensteuer-2025", payload / "beispielfall")
+        verify_example(payload / "beispielfall")
 
         bootstrap = staging / "bootstrap"
         subprocess.run(
@@ -79,10 +91,13 @@ def build(output: Path, compiler: str) -> Path:
         subprocess.run(
             [
                 compiler,
+                f"{switch}INPUTCHARSET",
+                "UTF8",
                 *[
                     f"{switch}D{key}={value}"
                     for key, value in {
-                        "PAYLOAD": payload,
+                        "PAYLOAD_PATTERN": payload / "*",
+                        "LICENSE_FILE": payload / "LICENSE",
                         "OUTPUT": compiled,
                         "FINAMT_VERSION": version,
                         "BUNDLE_ID": bundle,

@@ -10,7 +10,7 @@ InstallDir "$LOCALAPPDATA\Programs\finamt"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 ShowInstDetails show
-LicenseData "${PAYLOAD}/LICENSE"
+LicenseData "${LICENSE_FILE}"
 Page license
 Page instfiles
 UninstPage uninstConfirm
@@ -32,7 +32,7 @@ FunctionEnd
 Section "finamt"
   StrCpy $ReleaseDir "$INSTDIR\releases\${BUNDLE_ID}"
   SetOutPath "$ReleaseDir"
-  File /r "${PAYLOAD}/*"
+  File /r "${PAYLOAD_PATTERN}"
 
   DetailPrint "Python und die festgelegten Abhängigkeiten werden eingerichtet. Dazu ist Internetzugang nötig."
   System::Call 'Kernel32::SetEnvironmentVariableW(w "UV_PYTHON_INSTALL_DIR", w "$INSTDIR\python") i'
