@@ -23,6 +23,7 @@ jobs:
         echo "Coverage: ${COVERAGE}%" >> $GITHUB_STEP_SUMMARY
 
     - name: Update coverage badge
+      if: github.repository == 'spaceoctahedron/finamt' && github.event_name == 'push'
       uses: schneegans/dynamic-badges-action@v1.7.0
       with:
         auth: ${{ secrets.GIST_TOKEN }}

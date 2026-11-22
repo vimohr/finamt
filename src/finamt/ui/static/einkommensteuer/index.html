@@ -160,6 +160,17 @@
                 <label>Fundstelle<input name="locator" required></label>
                 <label>PDF-Seite<input name="page" type="number" min="1" step="1" value="1"></label>
               </div>
+              <label class="checkbox" id="expense-reimbursement-option" hidden><input name="reimbursed" type="checkbox"> Zu dieser Ausgabe eine Erstattung erhalten</label>
+              <fieldset id="expense-reimbursement-fields" hidden disabled>
+                <legend>Erstattung</legend>
+                <div class="split">
+                  <label>Erstatteter Betrag in Euro<input name="reimbursement_amount" inputmode="decimal" pattern="[0-9]+([,.][0-9]{1,2})?" required></label>
+                  <label>Erhalten am<input name="reimbursement_date" type="date" min="2025-01-01" max="2025-12-31" required></label>
+                  <label>Erstattungsbeleg<select name="reimbursement_document" data-doc-select required></select></label>
+                  <label>Fundstelle der Erstattung<input name="reimbursement_locator" required></label>
+                  <label>PDF-Seite des Erstattungsbelegs<input name="reimbursement_page" type="number" min="1" step="1" value="1"></label>
+                </div>
+              </fieldset>
               <button type="submit">Ausgabe übernehmen</button>
             </form>
           </details>
@@ -186,7 +197,7 @@
             </form>
           </details>
           <details>
-            <summary>Dienstreisetag und Mahlzeiten</summary>
+            <summary>Dienstreisetag und Fahrtkilometer</summary>
             <form id="trip">
               <div class="split">
                 <label>Reisetag<input name="date" type="date" required></label>
@@ -207,6 +218,20 @@
                 <div class="split" id="meals"></div>
               </fieldset>
               <button type="submit">Dienstreisetag übernehmen</button>
+            </form>
+            <form id="trip-mileage">
+              <fieldset>
+                <legend>Gefahrene Kilometer mit privatem Fahrzeug</legend>
+                <div class="split">
+                  <label>Reisetag<input name="date" type="date" min="2025-01-01" max="2025-12-31" required></label>
+                  <label>Gefahrene Strecke in km<input name="km" inputmode="decimal" pattern="[0-9]+([,.][0-9]{1,3})?" required></label>
+                  <label>Fahrzeug<select name="vehicle"><option value="private_car">Privater Pkw</option><option value="other_private_motor_vehicle">Anderes privates motorbetriebenes Fahrzeug</option></select></label>
+                  <label>Fahrtnachweis<select name="document" data-doc-select required></select></label>
+                  <label>Fundstelle der Kilometer<input name="locator" required></label>
+                  <label>PDF-Seite des Fahrtnachweises<input name="page" type="number" min="1" step="1" value="1"></label>
+                </div>
+              </fieldset>
+              <button type="submit">Fahrtkilometer übernehmen</button>
             </form>
           </details>
           <details>
@@ -232,7 +257,7 @@
             </form>
           </details>
           <p id="expenses-count" class="muted"></p>
-          <p>In den erweiterten Angaben kannst du einzelne Einträge korrigieren, Erstattungen, Fahrkarten und gefahrene Kilometer ergänzen.</p>
+          <p>In den erweiterten Angaben kannst du einzelne Einträge korrigieren und Fahrkarten ergänzen.</p>
           <button type="button" class="action next" data-next="profile">Zum Hauptvordruck</button>
         </section>
         <section data-sheet="profile" hidden>

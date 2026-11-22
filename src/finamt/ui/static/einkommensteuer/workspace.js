@@ -187,7 +187,7 @@ function changed() {
   renderOriginals();
   renderWages();
   const count = ["expenses", "donations", "insurance_payments", "travel_costs", "household_costs",
-    "work_assets", "church_tax_payments"].reduce((sum, key) => sum + (taxCase[key]?.length ?? 0), 0);
+    "work_assets", "church_tax_payments", "travel_mileage"].reduce((sum, key) => sum + (taxCase[key]?.length ?? 0), 0);
   el("expenses-count").textContent = count + " Ausgaben · " + (taxCase.workdays?.length ?? 0) + " erfasste Arbeitstage";
 }
 
@@ -760,14 +760,37 @@ onForm("commute", (form) => {
   notify("Pendelstrecke übernommen.");
 });
 
+function updateExpenseReimbursement() {
+  const form = el("expense");
+  const eligible = formValue(form, "category").startsWith("expenses:");
+  if (!eligible) form.elements.reimbursed.checked = false;
+  el("expense-reimbursement-option").hidden = !eligible;
+  const fields = el("expense-reimbursement-fields");
+  fields.hidden = fields.disabled = !form.elements.reimbursed.checked;
+}
+el("expense-category").addEventListener("change", updateExpenseReimbursement);
+el("expense").elements.reimbursed.addEventListener("change", updateExpenseReimbursement);
+updateExpenseReimbursement();
+
 onForm("expense", (form) => {
   const [collection, category] = formValue(form, "category").split(":");
   const paid_on = formValue(form, "date");
   if (!paid_on.startsWith("2025-")) throw new Error("Die Zahlung muss im Jahr 2025 liegen.");
   const item = {category, paid_on, amount: decimal(formValue(form, "amount")), source: source(form)};
-  if (collection === "expenses") item.description = formValue(form, "description");
+  if (collection === "expenses") {
+    item.description = formValue(form, "description");
+    if (form.elements.reimbursed.checked) {
+      const amount = decimal(formValue(form, "reimbursement_amount"));
+      if (Number(amount) > Number(item.amount)) throw new Error("Die Erstattung darf die Ausgabe nicht übersteigen.");
+      item.reimbursement = {
+        amount, paid_on: formValue(form, "reimbursement_date"), source: source(form, "reimbursement_"),
+      };
+    }
+  }
   if (collection === "donations") item.recipient = formValue(form, "description");
   add(collection, item);
+  form.reset();
+  updateExpenseReimbursement();
   notify("Ausgabe übernommen.");
 });
 
@@ -813,7 +836,22 @@ onForm("trip", (form) => {
     claim.assignment_source = evidence;
   }
   add("travel_days", claim);
+  const mileageDate = el("trip-mileage").elements.date;
+  if (!mileageDate.value) mileageDate.value = day;
   notify("Dienstreisetag übernommen.");
+});
+
+onForm("trip-mileage", (form) => {
+  const evidence = source(form);
+  const duplicate = taxCase.travel_mileage?.some(({source: entry}) => entry.document === evidence.document
+    && (entry.page ?? null) === (evidence.page ?? null) && entry.locator === evidence.locator);
+  if (duplicate) throw new Error("Diese Fundstelle ist bereits für Fahrtkilometer erfasst.");
+  add("travel_mileage", {
+    day: formValue(form, "date"), driven_km: decimal(formValue(form, "km")),
+    vehicle: formValue(form, "vehicle"), source: evidence,
+  });
+  form.reset();
+  notify("Fahrtkilometer übernommen.");
 });
 
 onForm("household", (form) => {

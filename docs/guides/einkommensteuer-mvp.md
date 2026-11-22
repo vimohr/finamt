@@ -38,7 +38,7 @@ Die ESt-Schnittstelle und die Hersteller-ID für den Fork parallel zur Fachlogik
 Starte `uv run finamt serve --no-browser` und öffne [die lokale Fallansicht](http://127.0.0.1:8000/einkommensteuer).
 
 1. Beantworte unter **Steuersituation** die Fragen für 2025. Lade danach die gültigen Lohnsteuerbescheinigungen, einen Arbeitskalender und weitere Nachweise. In **Originalbelege** kannst du jedes Original öffnen. Wähle bei PDF-Vorschlägen die betreffende Seite.
-2. Lies die Lohnsteuerbescheinigungen aus und bestätige die Positionen neben dem Original. Für Scans kannst du die lokale OCR einschalten. Die weiteren Formulare erfassen Arbeitstage, Ausgaben, Reisen, Vorsorge, Spenden und haushaltsnahe Leistungen. Fahrkarten, Fahrtkilometer, Erstattungen und Vorauszahlungen lassen sich in den erweiterten Angaben ergänzen.
+2. Lies die Lohnsteuerbescheinigungen aus und bestätige die Positionen neben dem Original. Für Scans kannst du die lokale OCR einschalten. Die weiteren Formulare erfassen Arbeitstage, Ausgaben, Reisen, Vorsorge, Spenden und haushaltsnahe Leistungen. Erfasse eine Fortbildungserstattung bei der Ausgabe mit Datum und Erstattungsbeleg. Unter **Dienstreisetag und Fahrtkilometer** kannst du die gefahrenen Kilometer mit eigenem Nachweis eintragen. Weitere Angaben wie Fahrkartenkosten und Vorauszahlungen lassen sich in den erweiterten Angaben ergänzen.
 3. Bestätige das Profil für den Hauptvordruck und erstelle die Vorschau. Die Regelprüfung gleicht die Lohnpositionen erneut mit lesbaren PDFs ab. Bei einer Abweichung bleibt die Abschlussbestätigung gesperrt. Offene Fragen und manuelle Prüfpunkte stehen neben der Übersicht.
 4. Gehe Arbeitslohn, Werbungskosten, Jahresschätzung und Anlagen durch. **Prüfen** öffnet Rechenweg und Fundstellen. Nach dem Durchgang kannst du die Übersicht bestätigen und den Prüfentwurf als JSON speichern. Speichere die Falldatei und die Originale separat, um später weiterzuarbeiten. Die Anwendung speichert diese Dateien nicht dauerhaft auf dem Server.
 
@@ -98,7 +98,20 @@ uv run python examples/einkommensteuer-2025/prepare_comparison.py vergleichsfael
 | `standardfall` | Lohnbescheinigung, Arbeitskalender, Pendelstrecke, Angaben zur Person und Steuersituation | 46.250,30 € Arbeitslohn, 160 Tage an der ersten Tätigkeitsstätte, 40 überwiegend im Homeoffice |
 | `belegfall` | Dieselben Unterlagen sowie Fortbildung, Arbeitgebererstattung, Dienstreise, Spende, Handwerkerrechnung und Kontoauszug | 265 € Fortbildung nach Erstattung, 44,80 € Reisekosten nach Erstattung, 150 € Spende, 350 € begünstigte Handwerkerkosten |
 
-Beginne in beiden Anwendungen mit einem leeren Fall und denselben Unterlagen. Erfasse aktive Bearbeitungszeit, Wartezeit, Korrekturen und fehlende Werte. Prüfe nach Abschluss die Beträge am jeweiligen Beleg. Halte Installationszeit und Modell-Download fest, wenn sie beim ersten Durchlauf anfallen. In finamt gehören die Fortbildungserstattung und die Fahrtkilometer derzeit in die erweiterten Angaben. Stoppe mit den fiktiven Daten vor dem Versand. Für einen Vergleich bis zur Abgabe zählt bei finamt auch die manuelle Übertragung aus dem Prüfentwurf. Der amtliche Datenabruf braucht einen eigenen Test mit vorher eingerichteter Berechtigung.
+Beginne in beiden Anwendungen mit einem leeren Fall und denselben Unterlagen. Erfasse aktive Bearbeitungszeit, Wartezeit, Korrekturen und fehlende Werte. Prüfe nach Abschluss die Beträge am jeweiligen Beleg. Halte Installationszeit und Modell-Download fest, wenn sie beim ersten Durchlauf anfallen. Stoppe mit den fiktiven Daten vor dem Versand. Für einen Vergleich bis zur Abgabe zählt bei finamt auch die manuelle Übertragung aus dem Prüfentwurf. Der amtliche Datenabruf braucht einen eigenen Test mit vorher eingerichteter Berechtigung.
+
+## ELSTER-Referenzprüfung für 2025
+
+Der [ELSTER-Entwicklerbereich](https://www.elster.de/elsterweb/entwickler/login) stellt die Schnittstellenbeschreibung und das ERiC-SDK bereit. Benötigt werden die Beschreibung für die unbeschränkte Einkommensteuer 2025, das zugehörige XSD mit seinen Abhängigkeiten, die dokumentierte Datenartversion und ein offizielles synthetisches Referenz-XML. Verwende ein SDK für die lokale Plattform und das zur Referenz passende Schema.
+
+```bash
+uv run python scripts/validate_est_reference.py referenz.xml \
+  --schema /pfad/zum/referenzschema.xsd \
+  --eric-home /pfad/zur/eric-bibliothek \
+  --datenart-version "$FINAMT_EST_REFERENZVERSION"
+```
+
+Setze `FINAMT_EST_REFERENZVERSION` auf die dokumentierte Datenartversion. Das Werkzeug prüft dasselbe XML zuerst gegen das XSD und ruft dann ERiC mit `ERIC_VALIDIERE` auf. Halte SDK-Version, Datenartversion und Ergebnis für die Abnahme fest. Auf dieser Grundlage kann der nächste Schritt die Formularfelder samt Rechenweg auf die amtlichen XML-Felder abbilden und einen synthetischen Fall für das ELSTER-Testverfahren erzeugen.
 
 ## CLI und Beispielfälle
 
