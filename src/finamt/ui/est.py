@@ -22,6 +22,7 @@ from finamt.tax.est.assistants import (
 from finamt.tax.est.extraction import document_excerpt, propose_wage_certificate
 
 router = APIRouter(prefix="/einkommensteuer", tags=["Einkommensteuer"])
+_ASSETS = Path(__file__).parent / "static" / "einkommensteuer"
 _MAX_FILE_BYTES = 12 * 1024 * 1024
 _MAX_TOTAL_BYTES = 48 * 1024 * 1024
 _MAX_DOCUMENTS = 50
@@ -30,13 +31,23 @@ _MAX_DOCUMENTS = 50
 @router.get("", include_in_schema=False)
 def workspace():
     return FileResponse(
-        Path(__file__).parent / "static" / "einkommensteuer" / "index.html",
+        _ASSETS / "index.html",
         headers={
             "Cache-Control": "no-store",
             "Content-Security-Policy": "default-src 'self'; frame-src blob:; img-src 'self' blob:; base-uri 'none'; form-action 'self'",
             "Referrer-Policy": "no-referrer",
         },
     )
+
+
+@router.get("/workspace.css", include_in_schema=False)
+def workspace_styles():
+    return FileResponse(_ASSETS / "workspace.css")
+
+
+@router.get("/workspace.js", include_in_schema=False)
+def workspace_script():
+    return FileResponse(_ASSETS / "workspace.js")
 
 
 async def _read_original(file: UploadFile) -> bytes:

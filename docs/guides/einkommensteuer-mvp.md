@@ -50,6 +50,16 @@ FINAMT_EST_REVIEW_MODEL=qwen2.5:7b-instruct-q4_K_M \
 uv run finamt serve --no-browser
 ```
 
+## Windows-Desktop-Prototyp
+
+Der Prototyp ist für Windows 11 (x64) vorgesehen und öffnet die Fallansicht in einem eigenen Fenster. Er verwendet die lokal installierte [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). In PowerShell im ausgecheckten Repository starten.
+
+```powershell
+uv run --locked --extra windows-desktop finamt desktop
+```
+
+Der lokale Server startet beim Öffnen und endet beim Schließen des Fensters. Das Fenster bietet den Originalbeleg-Import, die Übersicht und den JSON-Export. Die beiden lokalen Sprachmodelle lassen sich wie in der Browseransicht über Umgebungsvariablen einschalten. Ein Windows-Installer und der Test des nativen Fensters auf Windows stehen noch aus.
+
 ## CLI und Beispielfälle
 
 Der synthetische [erweiterte Beispielfall](../../examples/einkommensteuer-2025/fall-vollstaendig.json) enthält alle für die Jahresschätzung erforderlichen Angaben. Die [kleine Anlage-N-Variante](../../examples/einkommensteuer-2025/fall.json) enthält Arbeitslohn, Pendelstrecke und Homeoffice.

@@ -573,6 +573,23 @@ def cmd_serve(
 
 
 # ---------------------------------------------------------------------------
+# Windows desktop sub-command
+# ---------------------------------------------------------------------------
+
+
+@app.command("desktop")
+def cmd_desktop() -> None:
+    """Open the employee income tax workspace in a Windows desktop window."""
+    from finamt.ui.desktop import launch
+
+    try:
+        launch()
+    except (OSError, RuntimeError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

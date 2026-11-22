@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import urlsplit
 
 import fitz
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from finamt.tax.est.extraction import propose_wage_certificate
 from finamt.ui.api import app
+from finamt.ui.desktop import _local_workspace
 
 
 @pytest.fixture
@@ -104,6 +107,40 @@ def test_workspace_upload_review_and_source_check(synthetic_pdf):
         invalid = _preview(client, case, synthetic_pdf + b"substituted")
         assert invalid.status_code == 422
         assert "SHA-256 mismatch" in invalid.json()["detail"]
+
+
+def test_desktop_workspace_serves_only_the_local_tax_workflow_and_shuts_down(synthetic_pdf):
+    with _local_workspace() as url:
+        address = urlsplit(url)
+        assert address.hostname == "127.0.0.1"
+        origin = f"{address.scheme}://{address.netloc}"
+        with httpx.Client(base_url=origin, timeout=3, trust_env=False) as client:
+            home = client.get("/", follow_redirects=True)
+            assert str(home.url) == url
+            assert "Steuerassistent" in home.text
+            assert client.get("/einkommensteuer/workspace.css").is_success
+            assert client.get("/einkommensteuer/workspace.js").is_success
+            assert client.get("/receipts").status_code == 404
+
+            endpoint = "/einkommensteuer/api/payroll"
+            files = {"file": ("lohn.pdf", synthetic_pdf, "application/pdf")}
+            response = client.post(endpoint, files=files, headers={"Origin": "https://example.org"})
+            assert response.status_code == 403
+            uploaded = client.post(endpoint, files=files, headers={"Origin": origin})
+            assert uploaded.is_success
+            case = _web_case(uploaded.json())
+            doc = uploaded.json()["document_id"]
+            response = client.post(
+                "/einkommensteuer/api/preview",
+                data={"case_json": json.dumps(case)},
+                files=[("originals", (doc, synthetic_pdf, "application/pdf"))],
+                headers={"Origin": origin},
+            )
+            assert response.is_success
+            assert response.json()["summary"]["gross_wages"]["value"] == "46250.30"
+
+    with pytest.raises(httpx.ConnectError):
+        httpx.get(url, timeout=3, trust_env=False)
 
 
 def test_extraction_does_not_accept_unrelated_or_incomplete_content():
