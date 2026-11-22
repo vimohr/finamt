@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 from decimal import Decimal
-from pathlib import Path
 from threading import Lock
 from typing import Literal
 
@@ -14,11 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from finamt.agents import llm_backend
 from finamt.utils import clean_json_response
 
-from .extraction import document_excerpt, matching_amount, propose_wage_certificate
-from .models import Donation, EmployeeCase, Expense, InsurancePayment
+from .extraction import document_excerpt, matching_amount
+from .models import Donation, Expense, InsurancePayment
 
-Stage = Literal["documents", "payroll", "expenses", "profile", "review"]
+Stage = Literal["intake", "documents", "payroll", "expenses", "profile", "review"]
 _STAGE_GUIDE: dict[Stage, str] = {
+    "intake": "Beantworte die Standardfragen für 2025. Wähle bei einer offenen Angabe Unsicher. Ich zeige dir, welche Angaben zusätzlich geklärt werden müssen.",
     "documents": "Lade deine Lohnsteuerbescheinigungen und Belege hoch. Du kannst jedes Original direkt öffnen.",
     "payroll": "Prüfe pro Lohnsteuerbescheinigung den Zeitraum und die Beträge. Leere Felder am Original bleiben leer.",
     "expenses": "Erfasse Arbeitswege, Homeoffice und weitere Kosten. Ordne jedem Betrag den Beleg und seine Fundstelle zu.",
@@ -173,97 +173,6 @@ def _sourced_candidate(
         data["source"]["locator"] = quote
         data["source"]["page"] = page
     return {"collection": candidate.collection, "facts": data}
-
-
-def review_wage_originals(case: EmployeeCase, documents: dict[str, bytes]) -> list[dict]:
-    """Compare transcribed fields to an independent read of the original PDF."""
-    findings = []
-    for wage in sorted(case.wage_certificates, key=lambda item: item.document):
-        key = f"wage.{wage.document}"
-        source = case.documents[wage.document]
-        data = documents[wage.document]
-        if Path(source.path).suffix.lower() != ".pdf" and not data.startswith(b"%PDF-"):
-            findings.append(
-                {
-                    "code": "payroll_manual_source",
-                    "severity": "notice",
-                    "trace": f"{key}.3",
-                    "message": "Der Originalbeleg wurde als Text referenziert. Bitte die Lohnbeträge manuell abgleichen.",
-                }
-            )
-            continue
-        proposed = propose_wage_certificate(data, source.path, case.tax_year)["proposals"]
-        if len(proposed) > 1:
-            findings.append(
-                {
-                    "code": "payroll_multiple_certificates",
-                    "severity": "blocker",
-                    "trace": f"{key}.3",
-                    "message": "Mehrere Bescheinigungen in einer PDF erkannt. Bitte die gültigen Bescheinigungen einzeln erfassen.",
-                }
-            )
-        candidate = next(
-            (
-                entry["certificate"]
-                for entry in proposed
-                if entry["certificate"]["page"] == wage.page
-            ),
-            None,
-        )
-        if candidate is None or "3" not in candidate["amounts"]:
-            findings.append(
-                {
-                    "code": "payroll_not_readable",
-                    "severity": "notice",
-                    "trace": f"{key}.3",
-                    "message": "Die zweite Auslese konnte den Bruttoarbeitslohn nicht prüfen. Bitte die Originalseite ansehen.",
-                }
-            )
-            if candidate is None:
-                continue
-        if candidate["unsupported_positions"]:
-            findings.append(
-                {
-                    "code": "payroll_exception_found",
-                    "severity": "blocker",
-                    "trace": f"{key}.3",
-                    "message": "Der Originalbeleg enthält Positionen außerhalb des unterstützten Standardfalls.",
-                }
-            )
-        for position, amount in candidate["amounts"].items():
-            recorded = wage.amounts.get(position)
-            if (recorded is None and Decimal(amount) != 0) or (
-                recorded is not None and Decimal(amount) != recorded
-            ):
-                findings.append(
-                    {
-                        "code": "payroll_amount_differs",
-                        "severity": "blocker",
-                        "trace": f"{key}.{position}" if recorded is not None else f"{key}.3",
-                        "message": f"Position {position} weicht vom zweiten Auslesen ab. Bitte Betrag direkt am Original prüfen.",
-                    }
-                )
-        for position in sorted(set(wage.amounts) - set(candidate["amounts"])):
-            findings.append(
-                {
-                    "code": "payroll_position_not_readable",
-                    "severity": "notice",
-                    "trace": f"{key}.{position}",
-                    "message": f"Position {position} ließ sich beim erneuten Auslesen nicht bestätigen.",
-                }
-            )
-        for field in ("tax_class", "period_end"):
-            value = candidate.get(field)
-            if value and value != wage.model_dump(mode="json")[field]:
-                findings.append(
-                    {
-                        "code": "payroll_details_differ",
-                        "severity": "blocker",
-                        "trace": f"{key}.{field}",
-                        "message": "Steuerklasse oder Zeitraum weicht vom zweiten Auslesen ab. Bitte Original prüfen.",
-                    }
-                )
-    return findings
 
 
 def independent_review(

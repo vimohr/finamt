@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from decimal import Context, Decimal, localcontext
 
-from .assessment_2025 import estimate, main_form
+from .assessment_2025 import estimate, main_form, total_income_2025
 from .deductions_2025 import household, insurance, special_expenses
 from .expenses_2025 import expense_totals, travel_totals
+from .intake_2025 import check_intake
 from .models import EmployeeCase, WageCertificate
 from .provenance import CalculationTrace
 
@@ -265,7 +266,7 @@ def _calculate_home_office(
     return deduction, fields
 
 
-def draft_2025(case: EmployeeCase, trace: CalculationTrace) -> dict:
+def draft_2025(case: EmployeeCase, trace: CalculationTrace, source_findings: list[dict]) -> dict:
     # Use an explicit decimal context so a caller's global context cannot alter deductions.
     with localcontext(Context(prec=28)):
         certificates = tuple(sorted(case.wage_certificates, key=lambda item: item.document))
@@ -308,12 +309,38 @@ def draft_2025(case: EmployeeCase, trace: CalculationTrace) -> dict:
             ["gross_wages", "employment_deduction"],
         )
         main_fields = main_form(trace, case.filing) if case.filing else []
+        total_income = total_income_2025(trace, case, gross, income)
         insurance_values, insurance_fields = insurance(trace, case)
-        special, special_forms = special_expenses(trace, case, income, claims["initial_training"])
+        special, special_forms = special_expenses(
+            trace, case, total_income, claims["initial_training"]
+        )
         household_credit, household_fields, findings = household(trace, case)
+        findings.extend(source_findings)
+        intake = check_intake(case.intake, wage_count=len(certificates))
+        if case.intake or case.filing:
+            findings.extend(intake["findings"])
+        for certificate in certificates:
+            if certificate.unsupported_positions:
+                findings.append(
+                    {
+                        "code": "unsupported_payroll",
+                        "severity": "blocker",
+                        "trace": f"wage.{certificate.document}.3",
+                        "message": "Diese Lohnsteuerbescheinigung enthält weitere Sachverhalte. Der Originalbeleg bleibt im Fall verfügbar.",
+                    }
+                )
+        if case.filing and any(certificate.tax_class == 2 for certificate in certificates):
+            findings.append(
+                {
+                    "code": "payroll_class_2",
+                    "severity": "blocker",
+                    "question": "children",
+                    "message": "Steuerklasse II im Lohnbeleg. Kläre die Voraussetzungen für den Entlastungsbetrag für Alleinerziehende.",
+                }
+            )
         assessment = (
-            estimate(trace, case, income, insurance_values, special, household_credit)
-            if case.filing
+            estimate(trace, case, total_income, insurance_values, special, household_credit)
+            if case.filing and all(finding.get("severity") != "blocker" for finding in findings)
             else None
         )
         if not case.filing:
@@ -321,13 +348,6 @@ def draft_2025(case: EmployeeCase, trace: CalculationTrace) -> dict:
                 {
                     "code": "no_assessment_profile",
                     "message": "Für eine Jahresschätzung fehlen die bestätigten Angaben im Hauptvordruck.",
-                }
-            )
-        if any(cert.unsupported_positions for cert in certificates):
-            findings.append(
-                {
-                    "code": "unsupported_payroll",
-                    "message": "Mindestens eine Lohnsteuerbescheinigung enthält Werte außerhalb dieses Entwurfs.",
                 }
             )
         anlage_n = sorted(
@@ -346,7 +366,7 @@ def draft_2025(case: EmployeeCase, trace: CalculationTrace) -> dict:
         "status": "draft",
         "form": "Anlage N",
         "tax_year": 2025,
-        "rules_version": "2025.2",
+        "rules_version": "2025.3",
         "form_mapping_version": "est-forms-2025.2",
         "references": {
             "wage_certificate": _PAYROLL_FORM,
@@ -377,6 +397,7 @@ def draft_2025(case: EmployeeCase, trace: CalculationTrace) -> dict:
             )
         },
         "assessment": assessment,
+        "intake": intake,
         "findings": findings,
         "submission_status": "preview",
         "trace": trace.entries,

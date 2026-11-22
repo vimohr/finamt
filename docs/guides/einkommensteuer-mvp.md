@@ -37,7 +37,7 @@ Die ESt-Schnittstelle und die Hersteller-ID für den Fork parallel zur Fachlogik
 
 Starte `uv run finamt serve --no-browser` und öffne [die lokale Fallansicht](http://127.0.0.1:8000/einkommensteuer).
 
-1. Lade Lohnsteuerbescheinigungen, einen Arbeitskalender und weitere Nachweise. In **Originalbelege** kannst du jedes Original öffnen. Wähle bei PDF-Vorschlägen die betreffende Seite.
+1. Beantworte unter **Steuersituation** die Fragen für 2025. Lade danach die gültigen Lohnsteuerbescheinigungen, einen Arbeitskalender und weitere Nachweise. In **Originalbelege** kannst du jedes Original öffnen. Wähle bei PDF-Vorschlägen die betreffende Seite.
 2. Lies die Lohnsteuerbescheinigungen aus und bestätige die Positionen neben dem Original. Für Scans kannst du die lokale OCR einschalten. Die weiteren Formulare erfassen Arbeitstage, Ausgaben, Reisen, Vorsorge, Spenden und haushaltsnahe Leistungen. Fahrkarten, Fahrtkilometer, Erstattungen und Vorauszahlungen lassen sich in den erweiterten Angaben ergänzen.
 3. Bestätige das Profil für den Hauptvordruck und erstelle die Vorschau. Die Regelprüfung gleicht die Lohnpositionen erneut mit lesbaren PDFs ab. Bei einer Abweichung bleibt die Abschlussbestätigung gesperrt. Offene Fragen und manuelle Prüfpunkte stehen neben der Übersicht.
 4. Gehe Arbeitslohn, Werbungskosten, Jahresschätzung und Anlagen durch. **Prüfen** öffnet Rechenweg und Fundstellen. Nach dem Durchgang kannst du die Übersicht bestätigen und den Prüfentwurf als JSON speichern. Speichere die Falldatei und die Originale separat, um später weiterzuarbeiten. Die Anwendung speichert diese Dateien nicht dauerhaft auf dem Server.
@@ -50,15 +50,36 @@ FINAMT_EST_REVIEW_MODEL=qwen2.5:7b-instruct-q4_K_M \
 uv run finamt serve --no-browser
 ```
 
-## Windows-Desktop-Prototyp
+## Installation und Test unter Windows
 
-Der Prototyp ist für Windows 11 (x64) vorgesehen und öffnet die Fallansicht in einem eigenen Fenster. Er verwendet die lokal installierte [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). In PowerShell im ausgecheckten Repository starten.
+`finamt-0.26.0-windows-x64-setup.exe` installiert finamt für das aktuelle Benutzerkonto unter `%LOCALAPPDATA%\Programs\finamt`. Beim Setup lädt die mitgelieferte, hashgeprüfte uv-Version Python und die im Lockfile festgelegten Abhängigkeiten. Dafür ist Internetzugang nötig. Anschließend startet **finamt** aus dem Windows-Startmenü. Die Fallansicht verwendet die [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). Für Abrechnung und lesbare Lohn-PDFs genügt die Grundinstallation. Bei Verwendung von OCR oder Sprachmodellen können weitere Modelldateien heruntergeladen werden.
+
+Für den ersten Test eignet sich ein frisches Windows 11 (x64), etwa eine Test-VM. Vergleiche zuerst `Get-FileHash .\finamt-0.26.0-windows-x64-setup.exe -Algorithm SHA256` mit der mitgelieferten Prüfsumme. Öffne nach dem Setup finamt aus dem Startmenü. Unter **Belege** lädst du `fall-vollstaendig.json` und die Originale aus dem Ordner `beispielfall`. Öffne einen Beleg, berechne die Vorschau und speichere den Prüfentwurf. Ändere anschließend im Fragebogen eine Antwort auf **Unsicher** und berechne erneut. Der Teilentwurf bleibt verfügbar und die Jahresschätzung wird ausgesetzt.
+
+Der Installer lässt sich aus dem Checkout mit Python ab 3.11, uv und [NSIS](https://nsis.sourceforge.io/Download) bauen. Optional `--makensis` mit dem absoluten Pfad zur Compilerdatei angeben.
+
+```powershell
+python scripts/windows/build_installer.py
+./scripts/windows/test_install.ps1 -Installer ./dist/windows/finamt-0.26.0-windows-x64-setup.exe -CheckWindow
+```
+
+Der Test installiert unter einem temporären Pfad in einem frischen Benutzerprofil, prüft Startmenü, Beispielfall und lokale Oberfläche und deinstalliert danach wieder. Für einen interaktiven Windows-Test prüft `-CheckWindow` zusätzlich, ob sich das WebView2-Fenster öffnen und schließen lässt. Der Test ohne diese Option eignet sich für die Windows-CI. Der erste Testbuild hat keine Codesignatur. Prüfe ihn in der Test-VM und beachte die Sicherheitseinstellungen des Rechners.
+
+Aus einem Checkout lässt sich das Fenster auch ohne Setup öffnen.
 
 ```powershell
 uv run --locked --extra windows-desktop finamt desktop
 ```
 
-Der lokale Server startet beim Öffnen und endet beim Schließen des Fensters. Das Fenster bietet den Originalbeleg-Import, die Übersicht und den JSON-Export. Die beiden lokalen Sprachmodelle lassen sich wie in der Browseransicht über Umgebungsvariablen einschalten. Ein Windows-Installer und der Test des nativen Fensters auf Windows stehen noch aus.
+Der lokale Server startet beim Öffnen und endet beim Schließen des Fensters. Die beiden lokalen Sprachmodelle lassen sich wie in der Browseransicht über Umgebungsvariablen einschalten.
+
+## Standardfragen und besondere Steuerfälle
+
+Fragebogen `2025.1` klärt Wohnsitz, Veranlagungsart, Kinder, Auslandsbezug, weitere Einkünfte, Lohnersatzleistungen, besonderen Arbeitslohn, Versicherungswechsel, abweichende Arbeitswege und weitere Abzüge. Dazu kommt die Anzahl der gültigen Lohnsteuerbescheinigungen. Die Anzahl wird mit den bestätigten Bescheinigungen verglichen. Eine Bescheinigung mit Steuerklasse II löst eine zusätzliche Prüfung zur Frage nach Kindern aus. Die bestätigten Antworten stehen unter `intake` in der Falldatei.
+
+Die Fallansicht und die CLI wenden dieselbe Prüfung an. Offene Antworten, fehlende Bescheinigungen oder ein Sachverhalt ohne passenden Regelpfad lassen den Fall als Teilentwurf bestehen. Der Entwurf nennt den jeweiligen Grund. Originalbelege und bestätigte Beträge bleiben abrufbar. Ein neues Steuerjahr oder ein zusätzlicher Regelpfad braucht eigene Referenzfälle für Berechnungen, Grenzen und Belegzuordnung.
+
+Der Altersentlastungsbetrag ist im unterstützten Arbeitnehmerprofil abgedeckt. Das Jahresregelwerk leitet Prozentsatz und Höchstbetrag aus dem bestätigten Geburtsdatum ab und berechnet den Betrag aus dem regulären Bruttoarbeitslohn. [§ 24a EStG](https://www.gesetze-im-internet.de/estg/__24a.html)
 
 ## CLI und Beispielfälle
 
@@ -76,7 +97,7 @@ In `documents` stehen Pfad und SHA-256-Hash jedes Originals. Relative Pfade werd
 
 Erfasst werden eine Strecke zur ersten Tätigkeitsstätte und ein Verkehrsmittel für alle dort angegebenen Hin- und Rückfahrten. Ein Kalendertag wird einmal erfasst. `permanently_without_other_workplace` gilt, wenn für die Tätigkeit dauerhaft kein anderer Arbeitsplatz zur Verfügung steht. Bei zeitweise fehlendem Arbeitsplatz gelten die allgemeinen Bedingungen. Der aktuelle Fallumfang setzt voraus, dass für die erfassten Tage keine konkurrierenden Kosten für ein häusliches Arbeitszimmer oder Unterkunftskosten aus doppelter Haushaltsführung angesetzt werden. Öffentliche Fahrkartenkosten betreffen die bestätigten Zahlungen für Arbeitswege im Steuerjahr. Zuschüsse von Jobcenter oder Arbeitsagentur, Sammelbeförderung, halbe Wege und gemischte Strecken folgen in Etappe 2.
 
-`forms` enthält die Vorschau der amtlichen Zeilen für Anlage N, ESt 1 A, Vorsorgeaufwand, Sonderausgaben sowie Haushaltsnahe Aufwendungen und bei Bedarf Sonstiges. `fields` bleibt die Liste der Zeilen aus Anlage N. `summary` enthält die Zwischenergebnisse, `assessment` die optionale Jahresschätzung. `trace` verbindet jeden Wert mit den verwendeten Eingaben und Jahresregeln. Die CLI prüft Hashes und Seitenreferenzen. Den zweiten Belegabgleich und die optionale Modellprüfung führt die Fallansicht aus.
+`forms` enthält die Vorschau der amtlichen Zeilen für Anlage N, ESt 1 A, Vorsorgeaufwand, Sonderausgaben sowie Haushaltsnahe Aufwendungen und bei Bedarf Sonstiges. `fields` bleibt die Liste der Zeilen aus Anlage N. `summary` enthält die Zwischenergebnisse, `assessment` die optionale Jahresschätzung. `trace` verbindet jeden Wert mit den verwendeten Eingaben und Jahresregeln. CLI und Fallansicht prüfen Hashes, Seitenreferenzen und lesbare Lohn-PDFs. Die Fallansicht bietet zusätzlich die optionale Modellprüfung.
 
 ## Grenzen des Stands
 

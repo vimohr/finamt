@@ -14,7 +14,7 @@ import fitz
 from finamt.exceptions import OCRProcessingError
 from finamt.ocr_processor import OCRProcessor
 
-from .models import WagePosition
+from .models import EmployeeCase, WagePosition
 
 _ROW = re.compile(r"(?:^|\s{2,})(?:Nr\.\s*)?([1-3]?\d)(?:\s*([a-c]))?[.)]\s+(\S.*)$", re.I)
 _MONEY = re.compile(r"(?<!\S)(-?\d+(?:\.\d{3})*),(\d{2})(?:\s*(?:EUR|€))?\s*$")
@@ -254,3 +254,94 @@ def matching_amount(quote: str, amount: Decimal) -> bool:
         Decimal(re.sub(r"[.\u00a0 ]", "", match[1]) + "." + match[2]) == amount
         for match in _RECEIPT_AMOUNT.finditer(quote)
     )
+
+
+def review_wage_originals(case: EmployeeCase, documents: dict[str, bytes]) -> list[dict]:
+    """Compare transcribed fields to an independent read of the original PDF."""
+    findings = []
+    for wage in sorted(case.wage_certificates, key=lambda item: item.document):
+        key = f"wage.{wage.document}"
+        source = case.documents[wage.document]
+        data = documents[wage.document]
+        if Path(source.path).suffix.lower() != ".pdf" and not data.startswith(b"%PDF-"):
+            findings.append(
+                {
+                    "code": "payroll_manual_source",
+                    "severity": "notice",
+                    "trace": f"{key}.3",
+                    "message": "Der Originalbeleg wurde als Text referenziert. Bitte die Lohnbeträge manuell abgleichen.",
+                }
+            )
+            continue
+        proposed = propose_wage_certificate(data, source.path, case.tax_year)["proposals"]
+        if len(proposed) > 1:
+            findings.append(
+                {
+                    "code": "payroll_multiple_certificates",
+                    "severity": "blocker",
+                    "trace": f"{key}.3",
+                    "message": "Mehrere Bescheinigungen in einer PDF erkannt. Bitte die gültigen Bescheinigungen einzeln erfassen.",
+                }
+            )
+        candidate = next(
+            (
+                entry["certificate"]
+                for entry in proposed
+                if entry["certificate"]["page"] == wage.page
+            ),
+            None,
+        )
+        if candidate is None or "3" not in candidate["amounts"]:
+            findings.append(
+                {
+                    "code": "payroll_not_readable",
+                    "severity": "notice",
+                    "trace": f"{key}.3",
+                    "message": "Die zweite Auslese konnte den Bruttoarbeitslohn nicht prüfen. Bitte die Originalseite ansehen.",
+                }
+            )
+            if candidate is None:
+                continue
+        if candidate["unsupported_positions"]:
+            findings.append(
+                {
+                    "code": "payroll_exception_found",
+                    "severity": "blocker",
+                    "trace": f"{key}.3",
+                    "message": "Der Originalbeleg enthält Positionen außerhalb des unterstützten Standardfalls.",
+                }
+            )
+        for position, amount in candidate["amounts"].items():
+            recorded = wage.amounts.get(position)
+            if (recorded is None and Decimal(amount) != 0) or (
+                recorded is not None and Decimal(amount) != recorded
+            ):
+                findings.append(
+                    {
+                        "code": "payroll_amount_differs",
+                        "severity": "blocker",
+                        "trace": f"{key}.{position}" if recorded is not None else f"{key}.3",
+                        "message": f"Position {position} weicht vom zweiten Auslesen ab. Bitte Betrag direkt am Original prüfen.",
+                    }
+                )
+        for position in sorted(set(wage.amounts) - set(candidate["amounts"])):
+            findings.append(
+                {
+                    "code": "payroll_position_not_readable",
+                    "severity": "notice",
+                    "trace": f"{key}.{position}",
+                    "message": f"Position {position} ließ sich beim erneuten Auslesen nicht bestätigen.",
+                }
+            )
+        for field in ("tax_class", "period_end"):
+            value = candidate.get(field)
+            if value and value != wage.model_dump(mode="json")[field]:
+                findings.append(
+                    {
+                        "code": "payroll_details_differ",
+                        "severity": "blocker",
+                        "trace": f"{key}.{field}",
+                        "message": "Steuerklasse oder Zeitraum weicht vom zweiten Auslesen ab. Bitte Original prüfen.",
+                    }
+                )
+    return findings

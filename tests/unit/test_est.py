@@ -91,7 +91,7 @@ def test_payroll_mapping_subtotals_and_trace(case_data, tmp_path):
 
     assert draft["status"] == "draft"
     assert draft["tax_year"] == 2025
-    assert draft["rules_version"] == "2025.2"
+    assert draft["rules_version"] == "2025.3"
     assert draft["form_mapping_version"] == "est-forms-2025.2"
     assert {field["kennzahl"]: (field["line"], field["value"]) for field in draft["fields"]} == {
         "110": (5, "40625.42"),

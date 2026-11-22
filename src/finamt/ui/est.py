@@ -17,9 +17,9 @@ from finamt.tax.est.assistants import (
     guide,
     independent_review,
     model_settings,
-    review_wage_originals,
 )
 from finamt.tax.est.extraction import document_excerpt, propose_wage_certificate
+from finamt.tax.est.intake_2025 import Intake2025, catalogue, check_intake
 
 router = APIRouter(prefix="/einkommensteuer", tags=["Einkommensteuer"])
 _ASSETS = Path(__file__).parent / "static" / "einkommensteuer"
@@ -60,6 +60,16 @@ async def _read_original(file: UploadFile) -> bytes:
 @router.get("/api/settings")
 def settings():
     return model_settings()
+
+
+@router.get("/api/intake")
+def intake_questions():
+    return catalogue()
+
+
+@router.post("/api/intake")
+def review_intake(answers: Intake2025):
+    return JSONResponse(check_intake(answers), headers={"Cache-Control": "no-store"})
 
 
 @router.post("/api/payroll")
@@ -135,8 +145,7 @@ async def guide_document(
 
 def _reviewed_preview(case: EmployeeCase, documents: dict[str, bytes], use_model: bool) -> dict:
     draft = draft_annual_return(case, document_bytes=documents)
-    findings = draft["findings"] + review_wage_originals(case, documents)
-    report = independent_review(draft, findings, use_model=use_model, documents=documents)
+    report = independent_review(draft, draft["findings"], use_model=use_model, documents=documents)
     draft["review"] = report
     draft["review"]["status"] = (
         "clarification_needed"

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from .extraction import review_wage_originals
 from .models import EmployeeCase
 from .provenance import CalculationTrace
 from .rules_2025 import draft_2025
@@ -24,6 +25,12 @@ def draft_annual_return(
         raise ValueError(
             f"Unsupported assessment year {case.tax_year}. Supported years: {supported}."
         )
-    return build_draft(
-        case, CalculationTrace(case.documents, source_dir, document_bytes=document_bytes)
+    trace = CalculationTrace(
+        case.documents,
+        source_dir,
+        document_bytes=document_bytes,
+        keep_originals=frozenset(wage.document for wage in case.wage_certificates),
     )
+    if missing := {wage.document for wage in case.wage_certificates}.difference(trace.originals):
+        raise ValueError(f"Unknown source document {min(missing)}")
+    return build_draft(case, trace, review_wage_originals(case, trace.originals))

@@ -2,7 +2,6 @@
 
 const el = (id) => document.getElementById(id);
 const formValue = (form, name) => form.elements.namedItem(name).value.trim();
-const tasks = ["documents", "payroll", "expenses", "profile", "review"];
 const emptyCase = () => ({
   schema_version: 1,
   tax_year: 2025,
@@ -18,6 +17,7 @@ const labels = {
   supported_expenses: "Erfasste Werbungskosten", employment_deduction: "Angesetzte Werbungskosten",
   employment_income: "Einkünfte aus nichtselbständiger Arbeit",
   taxable_income: "Zu versteuerndes Einkommen", insurance_deduction: "Abziehbare Vorsorgeaufwendungen",
+  age_relief: "Altersentlastungsbetrag", total_income: "Gesamtbetrag der Einkünfte",
   special_expense_deduction: "Abziehbare weitere Sonderausgaben",
   tariff_income_tax: "Tarifliche Einkommensteuer", assessed_income_tax: "Einkommensteuer nach Ermäßigungen",
   assessed_solidarity: "Solidaritätszuschlag", assessed_church_tax: "Kirchensteuer",
@@ -88,6 +88,7 @@ const categories = {
   },
 };
 const stageMessages = {
+  intake: "Beantworte die Fragen zur Steuersituation. Bei offenen Angaben zeige ich dir, was zu klären ist.",
   documents: "Du kannst jeden Beleg hier ansehen und eine bereits gespeicherte Falldatei laden.",
   payroll: "Wähle eine Bescheinigung aus. Ich schlage die erkannten Positionen vor. Prüfe sie neben dem Original, bevor du sie übernimmst.",
   expenses: "Gehen wir die Werbungskosten durch. Hattest du Dienstreisen, Fortbildungskosten oder Ausgaben für Arbeitsmittel?",
@@ -96,7 +97,8 @@ const stageMessages = {
 };
 let taxCase = emptyCase();
 const originalFiles = new Map();
-let activeStage = "documents";
+let activeStage = "intake";
+let intakeCatalogue = null;
 let proposal = null;
 let proposalVersion = null;
 let wageEdit = null;
@@ -347,6 +349,20 @@ function loadCase(json) {
   el("payroll-edit").hidden = true;
   changed();
   loadProfile();
+  loadIntake();
+}
+
+function loadIntake() {
+  if (!intakeCatalogue) return;
+  const form = el("scope-intake");
+  form.reset();
+  const intake = taxCase.intake;
+  if (intake?.version === intakeCatalogue.version) {
+    for (const {key} of intakeCatalogue.questions) form.elements.namedItem(key).value = intake.answers?.[key] ?? "";
+    form.elements.wage_count.value = intake.wage_certificate_count ?? "";
+  }
+  el("intake-status").textContent = intake ? "Geladene Antworten werden bei der Vorschau erneut geprüft." : "";
+  el("intake-findings").replaceChildren();
 }
 
 function loadProfile() {
@@ -456,6 +472,12 @@ function renderReview(data) {
     item.classList.toggle("blocker", finding.severity === "blocker");
     item.textContent = finding.message + " ";
     if (finding.trace) item.append(button("Fundstelle", () => showTrace(item, finding.trace)));
+    if (finding.question || finding.code.startsWith("intake_")) {
+      item.append(button("Zur Steuersituation", () => {
+        changeStage("intake");
+        if (finding.question) el("scope-intake").elements.namedItem(finding.question)?.focus();
+      }));
+    }
     issues.append(item);
   }
   const checked = data.review.status === "clarification_needed";
@@ -508,6 +530,55 @@ function updateReviewConfirmation() {
     || draft.review.status === "clarification_needed" || reviewedSections.size !== walkthrough.length
     || (!el("acknowledge-findings").hidden && !el("findings-reviewed").checked);
 }
+
+el("scope-intake").addEventListener("input", () => {
+  if (taxCase.intake) {
+    delete taxCase.intake;
+    changed();
+  }
+  el("intake-status").textContent = "Prüfe die aktuellen Antworten.";
+  el("intake-findings").replaceChildren();
+});
+onForm("scope-intake", async (form) => {
+  if (!intakeCatalogue) return;
+  const answers = Object.fromEntries(intakeCatalogue.questions.map(({key}) => [key, formValue(form, key)]));
+  const count = formValue(form, "wage_count");
+  const intake = {version: intakeCatalogue.version, answers, wage_certificate_count: count ? Number(count) : null};
+  taxCase.intake = intake;
+  changed();
+  const result = await request("intake", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(intake)});
+  if (taxCase.intake !== intake) return;
+  const message = {
+    supported: "Deine Angaben passen zum unterstützten Profil. Als Nächstes prüfen wir die Belege.",
+    needs_answers: "Einige Angaben brauchen noch Klärung. Du kannst inzwischen deine Belege erfassen.",
+    outside_scope: "Der Fall braucht zusätzliche Steuerregeln. Du kannst die Belege und erfassten Angaben als Entwurf sichern.",
+  }[result.status];
+  el("intake-status").textContent = message;
+  const findings = el("intake-findings");
+  findings.replaceChildren();
+  for (const finding of result.findings) {
+    const item = document.createElement("li");
+    item.textContent = finding.message;
+    findings.append(item);
+  }
+  say(message);
+});
+
+request("intake").then((catalogue) => {
+  intakeCatalogue = catalogue;
+  for (const {key, prompt} of catalogue.questions) {
+    const label = document.createElement("label");
+    label.textContent = prompt;
+    const select = document.createElement("select");
+    select.name = key;
+    select.required = true;
+    select.append(new Option("Antwort wählen", ""), new Option("Ja", "yes"), new Option("Nein", "no"), new Option("Unsicher", "unsure"));
+    label.append(select);
+    el("intake-questions").append(label);
+  }
+  el("scope-intake").querySelector('button[type="submit"]').disabled = false;
+  loadIntake();
+}).catch(() => { el("intake-status").textContent = "Der Fragenkatalog konnte nicht geladen werden. Lade das Fenster erneut."; });
 
 for (const item of document.querySelectorAll("[data-step], [data-next]")) {
   item.addEventListener("click", () => changeStage(item.dataset.step ?? item.dataset.next));

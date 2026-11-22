@@ -56,6 +56,22 @@ def full_case():
                 },
             }
         ],
+        "intake": {
+            "version": "2025.1",
+            "answers": {
+                "residence": "yes",
+                "single_assessment": "yes",
+                "children": "no",
+                "foreign": "no",
+                "other_income": "no",
+                "replacement_benefits": "no",
+                "special_wages": "no",
+                "insurance_change": "no",
+                "commute_exceptions": "no",
+                "additional_deductions": "no",
+            },
+            "wage_certificate_count": 1,
+        },
         "filing": {
             "taxpayer": {
                 "first_name": "Test",
@@ -358,6 +374,69 @@ def test_case_totals_point_to_confirmed_facts_or_year_rules(full_case):
 
     for entry in result["assessment"]["values"].values():
         resolve(entry["trace"], set())
+
+
+@pytest.mark.parametrize(
+    ("key", "answer", "expected"),
+    [
+        ("residence", "unsure", "intake_unresolved"),
+        ("foreign", "yes", "intake_outside_scope"),
+        ("single_assessment", "no", "intake_outside_scope"),
+        ("replacement_benefits", "yes", "intake_outside_scope"),
+    ],
+)
+def test_open_or_special_situation_keeps_the_draft_without_an_assessment(
+    full_case, key, answer, expected
+):
+    data, _ = full_case
+    data["intake"]["answers"][key] = answer
+    result = draft(full_case)
+    assert result["assessment"] is None
+    assert "taxable_income" not in result["trace"]
+    assert result["forms"]["Anlage N"]
+    assert any(item["code"] == expected and item["question"] == key for item in result["findings"])
+
+
+def test_older_filing_without_intake_and_wrong_certificate_count_are_caught(full_case):
+    data, _ = full_case
+    intake = data.pop("intake")
+    result = draft(full_case)
+    assert result["assessment"] is None
+    assert "intake_missing" in {item["code"] for item in result["findings"]}
+    data["intake"] = {**intake, "wage_certificate_count": 2}
+    result = draft(full_case)
+    assert result["assessment"] is None
+    assert "intake_payroll_count_differs" in {item["code"] for item in result["findings"]}
+
+
+def test_class_two_is_checked_against_childless_intake(full_case):
+    data, _ = full_case
+    data["wage_certificates"][0]["tax_class"] = 2
+    result = draft(full_case)
+    assert result["assessment"] is None
+    assert "payroll_class_2" in {item["code"] for item in result["findings"]}
+
+
+@pytest.mark.parametrize(
+    ("birth_date", "wage", "relief"),
+    [
+        ("1938-07-02", "50000.00", "1900.00"),
+        ("1960-01-01", "50000.00", "646.00"),
+        ("1961-01-01", "50000.00", "627.00"),
+        ("1961-01-01", "1000.01", "133.00"),
+        ("1961-01-02", "50000.00", "0.00"),
+    ],
+)
+def test_age_relief_uses_birthday_cohort_gross_wage_and_rounding(
+    full_case, birth_date, wage, relief
+):
+    data, _ = full_case
+    data["filing"]["taxpayer"]["date_of_birth"] = birth_date
+    data["wage_certificates"][0]["amounts"]["3"] = wage
+    result = draft(full_case)
+    assert result["assessment"]["values"]["age_relief"]["value"] == relief
+    assert "taxpayer.date_of_birth" in result["trace"]["age_relief_first_year"]["inputs"]
+    assert "total_income" in result["trace"]["taxable_income"]["inputs"]
 
 
 def test_cannot_claim_home_office_during_a_full_day_away(full_case):

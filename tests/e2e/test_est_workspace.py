@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import fitz
@@ -120,6 +121,7 @@ def test_desktop_workspace_serves_only_the_local_tax_workflow_and_shuts_down(syn
             assert "Steuerassistent" in home.text
             assert client.get("/einkommensteuer/workspace.css").is_success
             assert client.get("/einkommensteuer/workspace.js").is_success
+            assert client.get("/einkommensteuer/api/intake").json()["version"] == "2025.1"
             assert client.get("/receipts").status_code == 404
 
             endpoint = "/einkommensteuer/api/payroll"
@@ -141,6 +143,43 @@ def test_desktop_workspace_serves_only_the_local_tax_workflow_and_shuts_down(syn
 
     with pytest.raises(httpx.ConnectError):
         httpx.get(url, timeout=3, trust_env=False)
+
+
+def test_intake_screen_and_salary_mismatch_block_the_complete_assessment(synthetic_pdf):
+    example = (
+        Path(__file__).parents[2] / "examples" / "einkommensteuer-2025" / "fall-vollstaendig.json"
+    )
+    sample = json.loads(example.read_text(encoding="utf-8"))
+    intake = sample["intake"]
+    with TestClient(app) as client:
+        questions = client.get("/einkommensteuer/api/intake").json()
+        assert set(intake["answers"]) == {item["key"] for item in questions["questions"]}
+        assert (
+            client.post("/einkommensteuer/api/intake", json=intake).json()["status"] == "supported"
+        )
+        for answer, status in [("unsure", "needs_answers"), ("yes", "outside_scope")]:
+            intake["answers"]["foreign"] = answer
+            assert (
+                client.post("/einkommensteuer/api/intake", json=intake).json()["status"] == status
+            )
+        intake["answers"]["foreign"] = "no"
+
+        payroll = propose_wage_certificate(synthetic_pdf, "lohn.pdf", 2025)
+        case = _web_case(payroll)
+        case["intake"] = intake
+        document = payroll["document_id"]
+        source = {"document": document, "page": 1, "locator": "synthetic profile"}
+        filing = sample["filing"]
+        filing.update(case_facts=source)
+        filing["taxpayer"]["source"] = source
+        case["filing"] = filing
+        assert _preview(client, case, synthetic_pdf).json()["assessment"]
+
+        case["wage_certificates"][0]["amounts"]["3"] = "45000.00"
+        discrepancy = _preview(client, case, synthetic_pdf).json()
+        assert discrepancy["assessment"] is None
+        assert discrepancy["review"]["status"] == "clarification_needed"
+        assert "taxable_income" not in discrepancy["trace"]
 
 
 def test_extraction_does_not_accept_unrelated_or_incomplete_content():

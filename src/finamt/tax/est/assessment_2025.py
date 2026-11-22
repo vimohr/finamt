@@ -21,6 +21,35 @@ _SOLIDARITY_2025 = "https://www.bundesfinanzministerium.de/Content/DE/Standardar
 _SOLIDARITY_RATE_BASIS = "https://www.gesetze-im-internet.de/solzg_1995/__4.html"
 _CHURCH_TAX_BASIS = "https://www.gesetze-im-internet.de/estg/__51a.html"
 _CHURCH_TAX_RATES = "https://www.bundesfinanzministerium.de/Content/DE/Downloads/Broschueren_Bestellservice/steuern-von-a-z.pdf?__blob=publicationFile&v=8"
+_AGE_RELIEF_BASIS = "https://www.gesetze-im-internet.de/estg/__24a.html"
+_AGE_RELIEF_GUIDANCE = (
+    "https://ao.bundesfinanzministerium.de/esth/2025/A-Einkommensteuergesetz/"
+    "II-Einkommen-2-24b/8-Die-einzelnen-Einkunftsarten-13-24b/h-Gemeinsame-Vorschriften-24-24b/"
+    "Paragraf-24a/paragraf-24a.html"
+)
+_AGE_RELIEF_TABLE = (
+    ("40.0", 1900),
+    ("38.4", 1824),
+    ("36.8", 1748),
+    ("35.2", 1672),
+    ("33.6", 1596),
+    ("32.0", 1520),
+    ("30.4", 1444),
+    ("28.8", 1368),
+    ("27.2", 1292),
+    ("25.6", 1216),
+    ("24.0", 1140),
+    ("22.4", 1064),
+    ("20.8", 988),
+    ("19.2", 912),
+    ("17.6", 836),
+    ("16.0", 760),
+    ("15.2", 722),
+    ("14.4", 684),
+    ("14.0", 665),
+    ("13.6", 646),
+    ("13.2", 627),
+)
 
 _TARIFF = {
     "basic_allowance": Decimal(12096),
@@ -109,6 +138,48 @@ def main_form(trace: CalculationTrace, profile: FilingProfile) -> list[dict]:
     return sorted(fields, key=lambda field: field["line"])
 
 
+def total_income_2025(
+    trace: CalculationTrace, case: EmployeeCase, gross_wages: Decimal, employment_income: Decimal
+) -> Decimal:
+    relief = ZERO
+    inputs = ["employment_income"]
+    if case.filing:
+        dob = case.filing.taxpayer.date_of_birth
+        # The birthday's preceding day determines the completion of the age (§§ 187–188 BGB).
+        first_year = dob.year + 65 - int(dob.month == 1 and dob.day == 1)
+        trace.rule("rule.age_relief.age_threshold", 64, "years", _AGE_RELIEF_BASIS)
+        trace.derive(
+            "age_relief_first_year",
+            first_year,
+            "year",
+            "age_relief.first_year_after_age_threshold",
+            ["taxpayer.date_of_birth", "rule.age_relief.age_threshold"],
+        )
+        relief_inputs = ["age_relief_first_year"]
+        if first_year <= 2025:
+            rate, cap = _AGE_RELIEF_TABLE[max(first_year, 2005) - 2005]
+            trace.rule("rule.age_relief.rate", Decimal(rate), "%", _AGE_RELIEF_BASIS)
+            trace.rule("rule.age_relief.cap", Decimal(cap), "EUR", _AGE_RELIEF_BASIS)
+            trace.rule("rule.age_relief.rounding_unit", Decimal(1), "EUR", _AGE_RELIEF_GUIDANCE)
+            relief_inputs.extend(
+                [
+                    "gross_wages",
+                    "rule.age_relief.rate",
+                    "rule.age_relief.cap",
+                    "rule.age_relief.rounding_unit",
+                ]
+            )
+            relief = min(
+                Decimal(cap),
+                (gross_wages * Decimal(rate) / 100).to_integral_value(rounding=ROUND_CEILING),
+            )
+        trace.derive("age_relief", relief, "EUR", "age_relief.wage_share_capped", relief_inputs)
+        inputs.append("age_relief")
+    total = employment_income - relief
+    trace.derive("total_income", total, "EUR", "assessment.sum_income_after_age_relief", inputs)
+    return total
+
+
 def estimate(
     trace: CalculationTrace,
     case: EmployeeCase,
@@ -133,7 +204,7 @@ def estimate(
         "EUR",
         "assessment.income_after_special_expenses",
         [
-            "employment_income",
+            "total_income",
             "insurance_refund_overhang",
             "church_tax_refund_overhang",
             "insurance_deduction",
@@ -266,6 +337,8 @@ def estimate(
         "values": {
             key: trace.result(key)
             for key in (
+                "age_relief",
+                "total_income",
                 "taxable_income",
                 "insurance_deduction",
                 "special_expense_deduction",

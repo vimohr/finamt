@@ -202,5 +202,21 @@
     },
     "all_income_and_payments_reviewed": true,
     "insurance": "statutory_with_sick_pay"
+  },
+  "intake": {
+    "version": "2025.1",
+    "answers": {
+      "residence": "yes",
+      "single_assessment": "yes",
+      "children": "no",
+      "foreign": "no",
+      "other_income": "no",
+      "replacement_benefits": "no",
+      "special_wages": "no",
+      "insurance_change": "no",
+      "commute_exceptions": "no",
+      "additional_deductions": "no"
+    },
+    "wage_certificate_count": 1
   }
 }

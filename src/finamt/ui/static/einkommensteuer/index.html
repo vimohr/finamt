@@ -15,7 +15,8 @@
   <main>
     <h1>Einkommensteuer</h1>
     <nav id="steps" aria-label="Steuerfall">
-      <button type="button" data-step="documents" aria-current="step">Belege</button>
+      <button type="button" data-step="intake" aria-current="step">Steuersituation</button>
+      <button type="button" data-step="documents">Belege</button>
       <button type="button" data-step="payroll">Arbeitslohn</button>
       <button type="button" data-step="expenses">Ausgaben</button>
       <button type="button" data-step="profile">Hauptvordruck</button>
@@ -25,7 +26,7 @@
       <aside class="panel assistant" aria-labelledby="guide-heading">
         <h2 id="guide-heading">Steuerassistent</h2>
         <div id="conversation" class="conversation" role="log" aria-live="polite">
-          <p class="turn">Lade deine Lohnsteuerbescheinigung und die weiteren Belege hoch. Danach gehen wir die Angaben gemeinsam durch.</p>
+          <p class="turn">Wir klären zuerst deine Steuersituation für 2025. Danach gehen wir deine Belege und die dazu passenden Regeln durch.</p>
         </div>
         <form id="ask">
           <label for="message">Nachricht an den Assistenten</label>
@@ -45,7 +46,21 @@
       </aside>
       <div class="panel sheets">
         <div class="notice" id="notice" role="status" hidden></div>
-        <section data-sheet="documents">
+        <section data-sheet="intake">
+          <h2>Deine Steuersituation 2025</h2>
+          <p>Wähle „Unsicher“, wenn eine Angabe offen ist. Der Fall bleibt bearbeitbar, während du die Frage klärst.</p>
+          <form id="scope-intake">
+            <div id="intake-questions" class="split"></div>
+            <label>Wie viele gültige Lohnsteuerbescheinigungen liegen vor?
+              <input name="wage_count" type="number" min="1" max="50" step="1" placeholder="Feld leer lassen, falls unklar">
+            </label>
+            <button class="action next" type="submit" disabled>Antworten prüfen</button>
+          </form>
+          <p id="intake-status" role="status"></p>
+          <ul id="intake-findings"></ul>
+          <button type="button" class="next" data-next="documents">Zu den Belegen</button>
+        </section>
+        <section data-sheet="documents" hidden>
           <h2>Originalbelege</h2>
           <p>Wähle die Dateien aus. Sie bleiben für diesen Fall im Browser verfügbar.</p>
           <label class="file-picker" for="originals">PDFs, Bilder und Textbelege auswählen</label>
@@ -223,7 +238,8 @@
               <label>Steuernummer<input name="tax_number"></label>
               <label>Finanzamt<input name="tax_office"></label>
               <label>Deutsche IBAN<input name="iban"></label>
-              <label>Krankenversicherung<select name="insurance">
+              <label>Krankenversicherung<select name="insurance" required>
+                <option value="">Versicherungsstatus wählen</option>
                 <option value="statutory_with_sick_pay">Gesetzlich mit Krankengeldanspruch</option>
                 <option value="statutory_without_sick_pay">Gesetzlich ohne Krankengeldanspruch</option>
                 <option value="private">Private Krankenversicherung</option>

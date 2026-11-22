@@ -327,7 +327,7 @@ def special_expenses(
         deduction,
         "EUR",
         "donation.annual_income_limit",
-        ["eligible_charitable_donations", "employment_income", "rule.donation.income_share"],
+        ["eligible_charitable_donations", "total_income", "rule.donation.income_share"],
     )
     trace.derive(
         "remaining_charitable_donations",

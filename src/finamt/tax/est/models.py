@@ -18,6 +18,8 @@ from pydantic import (
     model_validator,
 )
 
+from .intake_2025 import Intake2025
+
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 DocumentId = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]+$")]
 PageNumber = Annotated[StrictInt, Field(ge=1)]
@@ -327,6 +329,7 @@ class EmployeeCase(_Input):
     church_tax_payments: tuple[ChurchTaxPayment, ...] = ()
     household_costs: tuple[HouseholdCost, ...] = ()
     filing: FilingProfile | None = None
+    intake: Intake2025 | None = None
 
     @model_validator(mode="after")
     def validate_case(self) -> EmployeeCase:
@@ -399,10 +402,8 @@ class EmployeeCase(_Input):
             raise ValueError(
                 "Confirm all wage statements, insurance contributions and payments before estimating"
             )
-        if any(item.unsupported_positions for item in self.wage_certificates):
-            raise ValueError("The wage certificates contain items outside the assessment profile")
-        if filing.taxpayer.date_of_birth <= date(self.tax_year - 64, 1, 1):
-            raise ValueError("This assessment profile does not cover the Altersentlastungsbetrag")
+        if filing.taxpayer.date_of_birth > date(self.tax_year, 12, 31):
+            raise ValueError("Birth date must be before the end of the assessment year")
         positions = {
             key
             for certificate in self.wage_certificates

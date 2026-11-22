@@ -19,9 +19,11 @@ class CalculationTrace:
         source_dir: Path | None = None,
         *,
         document_bytes: dict[str, bytes] | None = None,
+        keep_originals: frozenset[str] = frozenset(),
     ) -> None:
         self.documents = {key: document.model_dump() for key, document in sorted(documents.items())}
         self.entries: dict[str, dict] = {}
+        self.originals: dict[str, bytes] = {}
         self._page_counts: dict[str, int | None] = {}
         for key, document in documents.items():
             if document_bytes is not None and key in document_bytes:
@@ -32,6 +34,8 @@ class CalculationTrace:
                 raise ValueError(f"Source document {key} is missing or is not a regular file")
             if sha256(data).hexdigest() != document.sha256:
                 raise ValueError(f"SHA-256 mismatch for source document {key}")
+            if key in keep_originals:
+                self.originals[key] = data
             self._page_counts[key] = None
             if Path(document.path).suffix.lower() == ".pdf" or data.startswith(b"%PDF-"):
                 try:
