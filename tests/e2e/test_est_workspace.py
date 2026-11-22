@@ -404,11 +404,149 @@ def test_document_guide_accepts_only_a_cited_original_amount(monkeypatch):
             ).json()
 
         proposal = propose()["candidate"]
-        assert proposal["facts"]["source"]["locator"] == "Kursgebuehr: 1.120,00 EUR"
+        assert (
+            proposal["facts"]["source"]["locator"]
+            == "Kursgebuehr: 1.120,00 EUR · Bezahlt 08.04.2025"
+        )
         assert proposal["facts"]["amount"] == "1120.00"
+        candidate["candidate"]["facts"]["paid_on"] = "2025-04-01"
+        assert propose(source + b"\nRechnungsdatum 01.04.2025")["candidate"] is None
+        candidate["candidate"]["facts"]["paid_on"] = "2025-04-08"
         assert propose(source + b"\n" + source)["candidate"] is None
         candidate["candidate"]["facts"]["amount"] = "1121.00"
         assert propose()["candidate"] is None
         candidate["candidate"]["facts"]["amount"] = "1120.00"
         candidate["candidate"]["quote"] = "Frei erfundener Betrag 1.120,00 EUR"
         assert propose()["candidate"] is None
+
+
+def test_document_guide_links_amounts_to_their_own_payment_date(monkeypatch):
+    from finamt.agents import llm_backend
+
+    monkeypatch.setenv("FINAMT_EST_GUIDE_MODEL", "test-guide")
+    payment = "Fachkurs 14,50 EUR bezahlt am 08.04.2025."
+    other = "Sprachkurs 66,10 EUR bezahlt am 09.06.2025."
+    facts = {
+        "category": "training",
+        "description": "Fachkurs",
+        "amount": "14.50",
+        "paid_on": "2025-04-08",
+        "source": {"document": "kurs", "locator": "Fachkurs"},
+    }
+    candidate = {"collection": "expenses", "quote": payment, "facts": facts}
+    reply = {"reply": "Stimmt die Zahlung?", "candidate": candidate}
+    monkeypatch.setattr(llm_backend, "generate", lambda *args, **kwargs: json.dumps(reply))
+    with TestClient(app) as client:
+        for day in ("2025-04-08", "2025-06-09"):
+            facts["paid_on"] = day
+            result = client.post(
+                "/einkommensteuer/api/document-guide",
+                data={"stage": "expenses", "document": "kurs"},
+                files={"file": ("rechnung.txt", f"{payment}\n{other}".encode(), "text/plain")},
+            ).json()
+            if day == "2025-04-08":
+                assert result["candidate"]["facts"]["source"]["locator"] == payment
+            else:
+                assert result["candidate"] is None
+
+        net = "Nettobetrag: 12,00 EUR"
+        candidate["quote"] = net
+        facts.update(paid_on="2025-04-08", amount="12.00")
+        result = client.post(
+            "/einkommensteuer/api/document-guide",
+            data={"stage": "expenses", "document": "kurs"},
+            files={"file": ("rechnung.txt", f"{payment}\n{net}".encode(), "text/plain")},
+        ).json()
+        assert result["candidate"] is None
+
+
+@pytest.mark.parametrize(
+    ("excerpt", "question"),
+    [
+        (
+            "Kursgebühr: 330,00 EUR\nFällig am 30.10.2025. Kein Zahlungseingang.",
+            "Datum der Zahlung",
+        ),
+        ("Seminar 95,00 EUR. Am 08.04.2025 nicht bezahlt.", "Datum der Zahlung"),
+        ("Seminar 95,00 EUR. Wird am 08.04.2025 überwiesen.", "Datum der Zahlung"),
+        ("Kursgebühr 95,00 EUR. Erwarteter Zahlungseingang am 08.04.2025.", "Datum der Zahlung"),
+        ("Rechnungsbetrag 230,00 EUR. Rechnung eingegangen am 21.03.2025.", "Datum der Zahlung"),
+        ("Betrag der Spende nicht lesbar.\nGeldeingang am 15.09.2025.", "Betrag"),
+        ("Beitrag 98,15 EUR. Zahlung eingegangen am 20.12.2024.", "in 2025"),
+        (
+            "Überweisung ausgeführt am 28.01.2025. Betrag 43,90 EUR.\nVerwendungszweck nicht angegeben.",
+            "Zweck",
+        ),
+    ],
+)
+def test_unverified_payment_asks_for_a_source_without_model(monkeypatch, excerpt, question):
+    from finamt.agents import llm_backend
+
+    monkeypatch.setenv("FINAMT_EST_GUIDE_MODEL", "test-guide")
+
+    def unexpected_model(*args, **kwargs):
+        pytest.fail("A receipt with missing payment evidence should not use the model")
+
+    monkeypatch.setattr(llm_backend, "generate", unexpected_model)
+    with TestClient(app) as client:
+        response = client.post(
+            "/einkommensteuer/api/document-guide",
+            data={"stage": "expenses", "document": "beleg"},
+            files={"file": ("beleg.txt", excerpt.encode(), "text/plain")},
+        )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["candidate"] is None
+    assert result["agent"] == "guided"
+    assert question in result["reply"]
+
+
+@pytest.mark.parametrize(
+    ("heading", "amount_line", "payment_line", "category"),
+    [
+        (
+            "Quittung über die private Haftpflichtversicherung.",
+            "Gezahlter Versicherungsbeitrag: 64,90 EUR",
+            "Lastschrift ausgeführt am 18.02.2025.",
+            "liability_accident_term_life",
+        ),
+        (
+            "Beiträge für die private Berufsunfähigkeitsversicherung.",
+            "Einzelbeitrag: 83,12 EUR",
+            "Am 18.02.2025 abgebucht.",
+            "disability",
+        ),
+        (
+            "Erstattungsbeleg für die gesetzliche Pflegeversicherung.",
+            "Beitragserstattung Pflegeversicherung: 47,50 EUR",
+            "Überwiesen an das Mitglied am 18.02.2025.",
+            "statutory_care_refund",
+        ),
+    ],
+)
+def test_clear_insurance_payment_preserves_category_and_sources_without_model(
+    monkeypatch, heading, amount_line, payment_line, category
+):
+    from finamt.agents import llm_backend
+
+    monkeypatch.setenv("FINAMT_EST_GUIDE_MODEL", "test-guide")
+
+    def unexpected_model(*args, **kwargs):
+        pytest.fail("An explicitly labeled insurance payment should not use the model")
+
+    monkeypatch.setattr(llm_backend, "generate", unexpected_model)
+    content = "\n".join([heading, amount_line, payment_line]).encode()
+    with TestClient(app) as client:
+        response = client.post(
+            "/einkommensteuer/api/document-guide",
+            data={"stage": "expenses", "document": "versicherung"},
+            files={"file": ("versicherung.txt", content, "text/plain")},
+        )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["agent"] == "guided"
+    assert result["candidate"]["collection"] == "insurance_payments"
+    facts = result["candidate"]["facts"]
+    assert facts["category"] == category
+    assert facts["paid_on"] == "2025-02-18"
+    assert facts["source"]["locator"] == f"{heading} · {amount_line} · {payment_line}"

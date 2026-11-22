@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from hashlib import sha256
@@ -249,11 +250,13 @@ def document_excerpt(content: bytes, filename: str, page: int | None) -> str:
     return content[:24_000].decode("utf-8", errors="replace").strip()[:6000]
 
 
+def receipt_amounts(text: str) -> Iterator[Decimal]:
+    for match in _RECEIPT_AMOUNT.finditer(text):
+        yield Decimal(re.sub(r"[.\u00a0 ]", "", match[1]) + "." + match[2])
+
+
 def matching_amount(quote: str, amount: Decimal) -> bool:
-    return any(
-        Decimal(re.sub(r"[.\u00a0 ]", "", match[1]) + "." + match[2]) == amount
-        for match in _RECEIPT_AMOUNT.finditer(quote)
-    )
+    return amount in receipt_amounts(quote)
 
 
 def review_wage_originals(case: EmployeeCase, documents: dict[str, bytes]) -> list[dict]:

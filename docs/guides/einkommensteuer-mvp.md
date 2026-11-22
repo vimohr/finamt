@@ -46,6 +46,8 @@ Unter **Ausgaben und Arbeitstage** kannst du einen Arbeitskalender für 2025 als
 
 Für Rückfragen und Belegvorschläge kannst du ein lokales Sprachmodell einschalten. Ein zweites Modell kann bestätigte Zahlen und ausgewählte Belegauszüge in einem separaten Aufruf prüfen. Es erhält den Erfassungsdialog nicht und stellt Rückfragen. Die Modellgewichte können beim ersten Aufruf heruntergeladen werden. Eingaben und Inferenz bleiben lokal.
 
+Bei Belegvorschlägen aus dem Original prüft finamt den Betrag und einen als Zahlung oder Erstattung ausgewiesenen Termin im Steuerjahr. Der Quellenverweis enthält beide Fundstellen. Bei mehreren Zahlungsdaten auf derselben Seite muss der Betrag mit dem passenden Datum belegt sein. Unvollständige Belege lösen früh eine Rückfrage aus. Klar bezeichnete Einzelbelege zur privaten Haftpflicht, privaten Berufsunfähigkeitsversicherung und zu Erstattungen der gesetzlichen Pflegeversicherung brauchen keinen Modellaufruf. Bestätige den Vorschlag nach Sichtprüfung.
+
 ```bash
 FINAMT_EST_GUIDE_MODEL=mistral:7b \
 FINAMT_EST_REVIEW_MODEL=qwen2.5:7b-instruct-q4_K_M \
