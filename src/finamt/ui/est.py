@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from finamt.tax.est import EmployeeCase, draft_annual_return
@@ -21,6 +21,8 @@ from finamt.tax.est.assistants import (
 )
 from finamt.tax.est.extraction import document_excerpt, propose_wage_certificate
 from finamt.tax.est.intake_2025 import Intake2025, catalogue, check_intake
+from finamt.tax.est.models import DocumentId, SourceDocument
+from finamt.tax.est.receipt_matching_2025 import match_receipts
 from finamt.tax.est.workday_csv_2025 import parse_workdays, workday_csv_template
 
 router = APIRouter(prefix="/einkommensteuer", tags=["Einkommensteuer"])
@@ -28,6 +30,7 @@ _ASSETS = Path(__file__).parent / "static" / "einkommensteuer"
 _MAX_FILE_BYTES = 12 * 1024 * 1024
 _MAX_TOTAL_BYTES = 48 * 1024 * 1024
 _MAX_DOCUMENTS = 50
+_DOCUMENTS = TypeAdapter(dict[DocumentId, SourceDocument])
 
 
 @router.get("", include_in_schema=False)
@@ -57,6 +60,22 @@ async def _read_original(file: UploadFile) -> bytes:
     if len(data) > _MAX_FILE_BYTES:
         raise HTTPException(413, "Ein einzelner Beleg darf bis zu 12 MiB groß sein.")
     return data
+
+
+async def _read_originals(
+    originals: list[UploadFile], expected: dict[str, SourceDocument]
+) -> dict[str, bytes]:
+    documents: dict[str, bytes] = {}
+    size = 0
+    for file in originals:
+        key = file.filename
+        if key is None or key not in expected or key in documents:
+            raise HTTPException(422, "Die ausgewählten Belege passen nicht zur Falldatei.")
+        documents[key] = data = await _read_original(file)
+        size += len(data)
+        if size > _MAX_TOTAL_BYTES:
+            raise HTTPException(413, "Die Belege dürfen zusammen bis zu 48 MiB groß sein.")
+    return documents
 
 
 @router.get("/api/settings")
@@ -171,6 +190,25 @@ async def guide_document(
     return JSONResponse(response, headers={"Cache-Control": "no-store"})
 
 
+@router.post("/api/receipt-matches")
+async def receipt_matches(
+    documents_json: Annotated[str, Form()],
+    originals: Annotated[list[UploadFile], File()],
+):
+    if len(documents_json) > 512_000 or len(originals) > _MAX_DOCUMENTS:
+        raise HTTPException(413, "Der Abgleich enthält zu viele Angaben oder Belege.")
+    try:
+        documents = _DOCUMENTS.validate_json(documents_json)
+    except ValidationError as exc:
+        raise HTTPException(422, "Die Belegliste für den Abgleich ist ungültig.") from exc
+    data = await _read_originals(originals, documents)
+    try:
+        result = await run_in_threadpool(match_receipts, documents, data)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
 def _reviewed_preview(case: EmployeeCase, documents: dict[str, bytes], use_model: bool) -> dict:
     draft = draft_annual_return(case, document_bytes=documents)
     report = independent_review(draft, draft["findings"], use_model=use_model, documents=documents)
@@ -199,16 +237,7 @@ async def preview(
             for error in exc.errors(include_url=False, include_context=False, include_input=False)
         ]
         raise HTTPException(422, details) from exc
-    documents = {}
-    size = 0
-    for file in originals:
-        key = file.filename
-        if key not in case.documents or key in documents:
-            raise HTTPException(422, "Die ausgewählten Belege passen nicht zur Falldatei.")
-        documents[key] = data = await _read_original(file)
-        size += len(data)
-        if size > _MAX_TOTAL_BYTES:
-            raise HTTPException(413, "Die Belege dürfen zusammen bis zu 48 MiB groß sein.")
+    documents = await _read_originals(originals, case.documents)
     try:
         draft = await run_in_threadpool(_reviewed_preview, case, documents, use_model)
     except ValueError as exc:

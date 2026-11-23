@@ -103,6 +103,7 @@ let proposal = null;
 let proposalVersion = null;
 let wageEdit = null;
 let workdayProposal = [];
+let receiptBatch = null;
 let draft = null;
 let revision = 0;
 let walkthrough = [];
@@ -186,6 +187,7 @@ function changed() {
   el("case-json").value = JSON.stringify(taxCase, null, 2);
   renderOriginals();
   renderWages();
+  renderReceiptMatches();
   const count = ["expenses", "donations", "insurance_payments", "travel_costs", "household_costs",
     "work_assets", "church_tax_payments", "travel_mileage"].reduce((sum, key) => sum + (taxCase[key]?.length ?? 0), 0);
   el("expenses-count").textContent = count + " Ausgaben · " + (taxCase.workdays?.length ?? 0) + " erfasste Arbeitstage";
@@ -351,6 +353,7 @@ function loadCase(json) {
     }
   }
   taxCase = incoming;
+  receiptBatch = null;
   originalFiles.clear();
   for (const [id, info] of Object.entries(taxCase.documents)) {
     if (filesByHash.has(info.sha256)) originalFiles.set(id, filesByHash.get(info.sha256));
@@ -360,6 +363,81 @@ function loadCase(json) {
   changed();
   loadProfile();
   loadIntake();
+}
+
+function receiptDocuments() {
+  return Object.fromEntries(Object.entries(taxCase.documents).filter(([id, info]) =>
+    originalFiles.has(id) && /\.(pdf|txt)$/i.test(info.path)
+  ));
+}
+
+function renderReceiptMatches() {
+  const list = el("receipt-matches");
+  const status = el("receipt-match-status");
+  list.replaceChildren();
+  if (receiptBatch && receiptBatch.key !== JSON.stringify(receiptDocuments())) receiptBatch = null;
+  status.hidden = !receiptBatch;
+  if (!receiptBatch) return;
+  const {findings, proposals} = receiptBatch.result;
+  status.textContent = proposals.length || findings.length
+    ? proposals.length + " Vorschläge · " + findings.length + " Rückfragen"
+    : "Lade Fortbildungsbelege mit Rechnungsnummer und Anbieter für den Abgleich hoch.";
+  for (const finding of findings) {
+    const row = document.createElement("li");
+    const content = document.createElement("span");
+    content.textContent = [finding.reference, finding.message].filter(Boolean).join(" · ");
+    row.append(content);
+    for (const id of finding.documents) {
+      row.append(button(taxCase.documents[id].path, () => viewOriginal(id)));
+    }
+    list.append(row);
+  }
+  for (const {reference, expense} of proposals) {
+    const row = document.createElement("li");
+    const content = document.createElement("span");
+    const euro = amount => formatted({unit: "EUR", value: amount});
+    const reimbursement = expense.reimbursement
+      ? "Erstattung " + euro(expense.reimbursement.amount) + " am " + expense.reimbursement.paid_on
+      : "Gab es eine Erstattung?";
+    content.textContent = [
+      reference, expense.description, euro(expense.amount) + " bezahlt am " + expense.paid_on, reimbursement,
+    ].join(" · ");
+    const sources = [
+      ["Rechnung", expense.source],
+      ["Zahlung", expense.payment_source],
+      ["Erstattung", expense.reimbursement?.source],
+    ];
+    row.append(content);
+    for (const [label, ref] of sources) {
+      if (ref) row.append(button(label, () => viewOriginal(ref.document, ref.page, ref.locator)));
+    }
+    const index = (taxCase.expenses ?? []).findIndex(item =>
+      item.source.document === expense.source.document && (item.source.page ?? null) === (expense.source.page ?? null)
+    );
+    const existing = taxCase.expenses?.[index];
+    const appendRefund = existing?.payment_source?.document === expense.payment_source.document
+      && (existing.payment_source.page ?? null) === (expense.payment_source.page ?? null)
+      && existing.payment_source.locator === expense.payment_source.locator
+      && existing.category === expense.category && existing.amount === expense.amount && existing.paid_on === expense.paid_on
+      && !existing.reimbursement && expense.reimbursement;
+    const confirm = button(appendRefund ? "Erstattung ergänzen" : "Fortbildung übernehmen", () => {
+      if (!receiptBatch || receiptBatch.key !== JSON.stringify(receiptDocuments())) return;
+      if (appendRefund) {
+        taxCase.expenses[index] = {...existing, reimbursement: expense.reimbursement};
+        changed();
+        notify("Erstattung samt Nachweis ergänzt.");
+      } else if (!existing) {
+        add("expenses", expense);
+        notify("Fortbildung samt Nachweisen übernommen.");
+      }
+    });
+    if (existing && !appendRefund) {
+      confirm.disabled = true;
+      confirm.textContent = "Bereits erfasst";
+    }
+    row.append(confirm);
+    list.append(row);
+  }
 }
 
 function loadIntake() {
@@ -706,6 +784,21 @@ onForm("payroll-edit", (form) => {
   form.hidden = true;
   notify("Lohnsteuerbescheinigung übernommen.");
 });
+
+el("match-receipts").addEventListener("click", () => run(el("match-receipts"), async () => {
+  const documents = receiptDocuments();
+  if (!Object.keys(documents).length) throw new Error("Füge zuerst Fortbildungsbelege als PDF oder Textdatei hinzu.");
+  const key = JSON.stringify(documents);
+  if (receiptBatch?.key !== key) {
+    const body = new FormData();
+    body.append("documents_json", key);
+    for (const id of Object.keys(documents)) body.append("originals", originalFiles.get(id), id);
+    const result = await request("receipt-matches", {method: "POST", body});
+    if (key !== JSON.stringify(receiptDocuments())) return;
+    receiptBatch = {key, result};
+  }
+  renderReceiptMatches();
+}));
 
 el("workday-import").elements.document.addEventListener("change", resetWorkdayImport);
 onForm("workday-import", async (form) => {

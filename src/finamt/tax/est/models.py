@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal
@@ -149,6 +150,7 @@ class Expense(Payment):
         "other_work",
     ]
     description: Text
+    payment_source: SourceLocation | None = None
     reimbursement: Payment | None = None
 
     @model_validator(mode="after")
@@ -386,9 +388,20 @@ class EmployeeCase(_Input):
             for day in self.workdays
         ):
             raise ValueError("A 24-hour absence cannot overlap with home or first-workplace work")
+        invoice_pages = Counter((item.source.document, item.source.page) for item in self.expenses)
+        if any(
+            item.payment_source and invoice_pages[item.source.document, item.source.page] > 1
+            for item in self.expenses
+        ):
+            raise ValueError("An invoice matched to a payment can be claimed only once")
         claim_sources = [
             entry.source for entry in (*payments, *self.work_assets, *self.travel_mileage)
         ]
+        claim_sources.extend(
+            expense.payment_source
+            for expense in self.expenses
+            if expense.payment_source is not None and expense.payment_source != expense.source
+        )
         if self.commute:
             claim_sources.extend(cost.source for cost in self.commute.public_transport_costs)
         if len(set(claim_sources)) != len(claim_sources):

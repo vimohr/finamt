@@ -66,16 +66,27 @@ def create_cases(output: Path) -> None:
         write_pdf(folder / "04-steuersituation.pdf", profile)
 
     folder = output / "belegfall"
-    write_pdf(folder / "05-fortbildung.pdf", sections["A"])
+    provider = "Rechnungsnummer: FB-2025-17\nRechnungssteller: Musterakademie\n"
+    write_pdf(
+        folder / "05-fortbildung.pdf",
+        "Rechnung\n" + provider + "Leistung: Berufliche Fortbildung Fachseminar\n"
+        "Rechnungsbetrag: 390,00 EUR\nRechnungsdatum: 03.04.2025",
+    )
     write_pdf(
         folder / "06-fortbildung-erstattung.pdf",
-        "Arbeitgeberzuschuss zum Fachseminar. Erstattung von 125,00 EUR am 30.04.2025. "
-        "Der Zuschuss betrifft die Teilnahmegebühr vom 10.04.2025.",
+        "Arbeitgebererstattung\n"
+        + provider
+        + "Erstattungsbetrag: 125,00 EUR\nAusgezahlt am 30.04.2025.",
     )
     write_pdf(folder / "07-dienstreise.pdf", sections["D"])
     write_pdf(folder / "08-spende.pdf", sections["E"])
     write_pdf(folder / "09-handwerker.pdf", sections["G"])
     write_pdf(folder / "10-kontoauszug.pdf", sections["H"] + " Überwiesener Betrag 525,00 EUR.")
+    write_pdf(
+        folder / "11-fortbildung-zahlung.pdf",
+        "Zahlungsbeleg\nVerwendungszweck: Rechnung FB-2025-17\nEmpfänger: Musterakademie\n"
+        "Überwiesener Betrag: 390,00 EUR\nBuchungstag: 10.04.2025",
+    )
 
 
 if __name__ == "__main__":

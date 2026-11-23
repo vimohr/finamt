@@ -7,7 +7,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
-from .models import EmployeeCase, Payment, SourcedAmount, WorkAsset
+from .models import EmployeeCase, Expense, Payment, SourcedAmount, WorkAsset
 from .provenance import CalculationTrace
 
 if TYPE_CHECKING:
@@ -33,7 +33,14 @@ def record_payment(
     facts = dict(details or {})
     if isinstance(payment, Payment):
         facts["paid_on"] = payment.paid_on.isoformat()
-    trace.fact(key, payment.amount, "EUR", (payment.source,), details=facts or None)
+    sources = (payment.source,)
+    if (
+        isinstance(payment, Expense)
+        and payment.payment_source
+        and payment.payment_source != payment.source
+    ):
+        sources += (payment.payment_source,)
+    trace.fact(key, payment.amount, "EUR", sources, details=facts or None)
     return payment.amount
 
 

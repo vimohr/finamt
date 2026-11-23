@@ -107,6 +107,15 @@
         <section data-sheet="expenses" hidden>
           <h2>Ausgaben und Arbeitstage</h2>
           <details open>
+            <summary>Fortbildungsbelege abgleichen</summary>
+            <div class="buttons">
+              <button id="match-receipts" type="button">Angehängte Belege prüfen</button>
+            </div>
+            <p>Füge Rechnung, Zahlungsbeleg und gegebenenfalls Erstattung unter <strong>Belege</strong> hinzu.</p>
+            <p id="receipt-match-status" role="status" hidden></p>
+            <ul id="receipt-matches" class="documents"></ul>
+          </details>
+          <details open>
             <summary>Arbeitskalender als CSV übernehmen</summary>
             <form id="workday-import">
               <p>Füge den Arbeitskalender unter <strong>Belege</strong> hinzu. Datum als JJJJ-MM-TT, Tätigkeitsstätte und Arbeitsplatz mit ja oder nein, Homeoffice mit nein, teilweise oder überwiegend.</p>

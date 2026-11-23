@@ -148,6 +148,7 @@ def guide(
         "insurance_payments": InsurancePayment,
     }
     schemas = {key: schema.model_json_schema() for key, schema in candidates.items()}
+    schemas["expenses"]["properties"].pop("payment_source", None)
     context = json.dumps(
         {
             "stage": stage,
@@ -200,7 +201,9 @@ def guide(
             pass
         else:
             if facts.source.document == document and facts.paid_on.year == year:
-                if not isinstance(facts, Expense) or facts.reimbursement is None:
+                if not isinstance(facts, Expense) or (
+                    facts.reimbursement is None and facts.payment_source is None
+                ):
                     candidate = _sourced_candidate(reply.candidate, facts, excerpt, payments, page)
     question = reply.reply.strip()
     if excerpt is not None and reply.candidate and not candidate:
