@@ -24,6 +24,22 @@ def write_pdf(path: Path, text: str) -> None:
         path.write_bytes(document.tobytes(no_new_id=True))
 
 
+def write_bank_statement(path: Path) -> None:
+    rows = (
+        ("Buchungstag", "Empfänger", "Verwendungszweck", "Betrag in EUR"),
+        ("08.04.2025", "Andere Akademie", "Rechnung FB-2025-18", "-390,00"),
+        ("10.04.2025", "Musterakademie", "Rechnung FB-2025-17", "-390,00"),
+        ("12.04.2025", "Musterakademie", "Rechnung FB-2025-17", "+390,00"),
+    )
+    with fitz.open() as document:
+        page = document.new_page()
+        page.insert_text((42, 60), "FIKTIVER BELEG · Softwaretest 2025\nKontoauszug April 2025")
+        for number, row in enumerate(rows):
+            for x, value in zip((42, 140, 280, 475), row, strict=True):
+                page.insert_text((x, 110 + 22 * number), value, fontsize=9)
+        path.write_bytes(document.tobytes(no_new_id=True))
+
+
 def calendar() -> bytes:
     rows = [workday_csv_template().strip("\r\n")]
     weeks_off = {16, 17, 18, 19, 22, 24, 32, 33, 40, 47}
@@ -82,14 +98,7 @@ def create_cases(output: Path) -> None:
     write_pdf(folder / "08-spende.pdf", sections["E"])
     write_pdf(folder / "09-handwerker.pdf", sections["G"])
     write_pdf(folder / "10-kontoauszug.pdf", sections["H"] + " Überwiesener Betrag 525,00 EUR.")
-    write_pdf(
-        folder / "11-fortbildung-zahlung.pdf",
-        "Kontoauszug April 2025\n"
-        "Buchung 1\nVerwendungszweck: Rechnung FB-2025-18\nEmpfänger: Andere Akademie\n"
-        "Überwiesener Betrag: 390,00 EUR\nBuchungstag: 08.04.2025\n\n"
-        "Buchung 2\nVerwendungszweck: Rechnung FB-2025-17\nEmpfänger: Musterakademie\n"
-        "Überwiesener Betrag: 390,00 EUR\nBuchungstag: 10.04.2025",
-    )
+    write_bank_statement(folder / "11-fortbildung-zahlung.pdf")
 
 
 if __name__ == "__main__":

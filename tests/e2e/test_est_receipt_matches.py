@@ -47,6 +47,10 @@ Empfänger: Musterakademie
 Überwiesener Betrag: 390,00 EUR
 Verwendungszweck: Rechnung FB-2025-17
 """
+TABLE_HEADERS = ("Buchungstag", "Empfänger", "Verwendungszweck", "Betrag in EUR")
+TABLE_DEBIT = ("10.04.2025", "Musterakademie", "Rechnung FB-2025-17", "-390,00")
+TABLE_OTHER_DEBIT = ("08.04.2025", "Andere Akademie", "Rechnung FB-2025-18", "-390,00")
+TABLE_CREDIT = ("12.04.2025", "Musterakademie", "Rechnung FB-2025-17", "+390,00")
 
 
 def _pdf(*pages: str, scan: bool = False) -> bytes:
@@ -60,6 +64,19 @@ def _pdf(*pages: str, scan: bool = False) -> bytes:
             image_page = image_pdf.new_page()
             image_page.insert_image(image_page.rect, pixmap=pdf[0].get_pixmap())
             return image_pdf.tobytes()
+
+
+def _table_pdf(rows, headers=TABLE_HEADERS, title="Kontoauszug April 2025"):
+    positions = (42, 140, 280, 475) if len(headers) == 4 else (35, 119, 202, 323, 479)
+    with fitz.open() as pdf:
+        pdf.new_page().insert_text((42, 60), title)
+        page = pdf.new_page()
+        # The content stream is set in column order. Positions, rather than that order, join the rows.
+        for column, x in reversed(list(enumerate(positions))):
+            page.insert_text((x, 90), headers[column], fontsize=9)
+            for number, cells in enumerate(rows, start=1):
+                page.insert_text((x, 90 + number * 22), cells[column], fontsize=9)
+        return pdf.tobytes()
 
 
 def _documents(originals):
@@ -235,6 +252,72 @@ def test_bank_statement_does_not_combine_fields_from_different_bookings(
     assert result["proposals"] == []
     (finding,) = result["findings"]
     assert question in finding["message"]
+
+
+def test_pdf_bank_table_links_one_debit_and_preserves_its_row(originals):
+    originals["payment"] = (
+        "kontoauszug.pdf",
+        _table_pdf([TABLE_OTHER_DEBIT, TABLE_DEBIT, TABLE_CREDIT]),
+    )
+    with TestClient(app) as client:
+        response = _match(client, originals)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["findings"] == []
+    (proposal,) = result["proposals"]
+    expense = proposal["expense"]
+    assert expense["paid_on"] == "2025-04-10"
+    assert expense["amount"] == "390.00"
+    assert expense["payment_source"] == {
+        "document": "payment",
+        "page": 2,
+        "locator": "Buchungszeile 2 · 10.04.2025 · Musterakademie · Rechnung FB-2025-17 · -390,00",
+    }
+
+
+def test_pdf_bank_table_takes_booking_date_from_its_own_column(originals):
+    headers = ("Buchungsdatum", "Wertstellung", "Empfänger", "Verwendungszweck", "Betrag")
+    row = ("10.04.2025", "09.04.2025", "Musterakademie", "Rechnung FB-2025-17", "-390,00 EUR")
+    originals["payment"] = ("kontoauszug.pdf", _table_pdf([row], headers))
+    with TestClient(app) as client:
+        response = _match(client, originals)
+    assert response.status_code == 200
+    (proposal,) = response.json()["proposals"]
+    assert proposal["expense"]["paid_on"] == "2025-04-10"
+
+
+@pytest.mark.parametrize(
+    ("rows", "headers", "question"),
+    [
+        ([TABLE_OTHER_DEBIT, ("", *TABLE_DEBIT[1:])], TABLE_HEADERS, "tatsächliche Zahlungs-"),
+        ([TABLE_OTHER_DEBIT, (TABLE_DEBIT[0], "", *TABLE_DEBIT[2:])], TABLE_HEADERS, "Anbieter"),
+        ([TABLE_CREDIT], TABLE_HEADERS, "Zahlungsbeleg gehört"),
+        ([TABLE_DEBIT, TABLE_DEBIT], TABLE_HEADERS, "Zahlungsbeleg gehört"),
+        ([("31.02.2025", *TABLE_DEBIT[1:])], TABLE_HEADERS, "tatsächliche Zahlungs-"),
+        ([TABLE_DEBIT], (*TABLE_HEADERS[:-1], "Betrag"), "Rechnungsbetrag"),
+    ],
+)
+def test_pdf_bank_table_reports_missing_and_ambiguous_bookings(originals, rows, headers, question):
+    originals["payment"] = ("kontoauszug.pdf", _table_pdf(rows, headers))
+    with TestClient(app) as client:
+        response = _match(client, originals)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["proposals"] == []
+    (finding,) = result["findings"]
+    assert question in finding["message"]
+
+
+def test_pdf_bank_table_treats_a_pending_section_as_unconfirmed(originals):
+    title = "Kontoauszug April 2025\nVorgemerkte Umsätze"
+    originals["payment"] = ("kontoauszug.pdf", _table_pdf([TABLE_DEBIT], title=title))
+    with TestClient(app) as client:
+        response = _match(client, originals)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["proposals"] == []
+    (finding,) = result["findings"]
+    assert "tatsächliche Zahlungs-" in finding["message"]
 
 
 def test_scan_reports_missing_text_and_hash_mismatch_stops_matching(originals):

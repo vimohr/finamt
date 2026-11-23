@@ -15,9 +15,10 @@ from typing import Literal
 import fitz
 from pydantic import ValidationError
 
+from .bank_statement import BookingRow, read_booking_table
 from .extraction import receipt_amounts
 from .models import Expense, SourceDocument, SourceLocation
-from .receipt_evidence import amount_payment_source, payment_sources
+from .receipt_evidence import amount_payment_source, payment_sources, printed_date
 
 Kind = Literal["invoice", "payment", "refund"]
 _AMOUNT_FIELDS: dict[Kind, tuple[str, ...]] = {
@@ -51,10 +52,15 @@ _EURO = re.compile(
 _TRAINING = re.compile(r"^(?:berufliche Fortbildung|Fachseminar)\b", re.IGNORECASE)
 _PENDING = re.compile(
     r"\b(?:terminüberweisung|unbezahlt|zahlung ausstehend|nicht (?:ausgeführt|überwiesen)|"
-    r"(?:geplant|voraussichtlich)(?:e[nrsm]?)?)\b",
+    r"(?:geplant|vorgemerkt|voraussichtlich)(?:e[nrsm]?)?)\b",
     re.IGNORECASE,
 )
 _BANK_STATEMENT = re.compile(r"^[ \t]*Kontoauszug\b", re.IGNORECASE | re.MULTILINE)
+_PENDING_SECTION = re.compile(
+    r"^[ \t]*(?:vorgemerkte|noch nicht gebuchte|ausstehende|geplante)[ \t]+"
+    r"(?:umsätze|buchungen|zahlungen)(?:[ \t]+\([^\r\n)]*\))?[ \t]*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 _BOOKING = re.compile(
     r"^[ \t]*Buchung[ \t]+(?:Nr\.?[ \t]*)?[0-9]+[ \t]*\r?$",
     re.IGNORECASE | re.MULTILINE,
@@ -72,18 +78,33 @@ class Receipt:
     source: SourceLocation
 
 
-def _read_pages(data: bytes, filename: str) -> list[tuple[int | None, str]]:
+@dataclass(frozen=True)
+class ReceiptPage:
+    number: int | None
+    text: str
+    bookings: list[BookingRow] | None = None
+
+
+def _read_pages(data: bytes, filename: str) -> list[ReceiptPage]:
     suffix = Path(filename).suffix.lower()
     if suffix == ".pdf" or data.startswith(b"%PDF-"):
         try:
             with fitz.open(stream=data, filetype="pdf") as pdf:
                 if pdf.needs_pass:
                     raise ValueError("Wähle eine entsperrte PDF-Datei.")
-                return [(page.number + 1, page.get_text(sort=True)) for page in pdf]
+                pages = []
+                for page in pdf:
+                    textpage = page.get_textpage()
+                    text = page.get_text(sort=True, textpage=textpage)
+                    bookings = None
+                    if "verwendungszweck" in text.casefold() and "betrag" in text.casefold():
+                        bookings = read_booking_table(page.get_text("words", textpage=textpage))
+                    pages.append(ReceiptPage(page.number + 1, text, bookings))
+                return pages
         except (fitz.FileDataError, fitz.EmptyFileError) as exc:
             raise ValueError("Die PDF-Datei ist nicht lesbar.") from exc
     if suffix == ".txt":
-        return [(None, data.decode("utf-8-sig", errors="replace"))]
+        return [ReceiptPage(None, data.decode("utf-8-sig", errors="replace"))]
     return []
 
 
@@ -179,6 +200,52 @@ def _receipt(
     )
 
 
+def _table_payment(
+    document: str, page: int | None, row: BookingRow, pending: bool
+) -> Receipt | None:
+    reference = _PURPOSE_REFERENCE.fullmatch(row.purpose)
+    if reference is None:
+        return None
+    if row.amount.startswith(("-", "−")):
+        unsigned = row.amount[1:].strip()
+    elif row.amount.endswith(("-", "−")):
+        unsigned = row.amount[:-1].strip()
+    else:
+        return None
+    euro = f"{unsigned} EUR" if row.euro_column and not _EURO.fullmatch(unsigned) else unsigned
+    amount = next(receipt_amounts(euro), None) if _EURO.fullmatch(euro) else None
+    locator = " · ".join(
+        filter(
+            None,
+            (f"Buchungszeile {row.number}", row.booking_date, row.payee, row.purpose, row.amount),
+        )
+    )
+    return Receipt(
+        references=(reference[1],),
+        issuer=row.payee.casefold() or None,
+        kind="payment",
+        description=None,
+        amount=amount if amount and amount > 0 else None,
+        paid_on=printed_date(row.booking_date)
+        if row.aligned and not pending and not _PENDING.search(locator)
+        else None,
+        source=SourceLocation(document=document, page=page, locator=locator),
+    )
+
+
+def _document_receipts(document: str, pages: list[ReceiptPage]) -> Iterator[Receipt | None]:
+    is_statement = any(_BANK_STATEMENT.search(page.text) for page in pages)
+    pending = any(_PENDING_SECTION.search(page.text) for page in pages)
+    for page in pages:
+        if is_statement and page.bookings is not None:
+            for row in page.bookings:
+                yield _table_payment(document, page.number, row, pending)
+        else:
+            blocks = _statement_bookings(page.text) if is_statement else ((None, page.text),)
+            for booking, block in blocks:
+                yield _receipt(document, page.number, block, booking)
+
+
 def _match_group(receipts: list[Receipt]) -> Expense:
     invoices = [item for item in receipts if item.kind == "invoice"]
     payments = [item for item in receipts if item.kind == "payment"]
@@ -244,20 +311,14 @@ def match_receipts(documents: dict[str, SourceDocument], originals: dict[str, by
         except ValueError as exc:
             findings.append({"message": str(exc), "documents": [document]})
             continue
-        if pages and all(not text.strip() for _, text in pages):
+        if pages and all(not page.text.strip() for page in pages):
             findings.append(
                 {
                     "message": "Kannst du für diesen Scan einen Beleg mit lesbarem Text auswählen?",
                     "documents": [document],
                 }
             )
-        is_statement = any(_BANK_STATEMENT.search(text) for _, text in pages)
-        records = (
-            _receipt(document, page, block, booking)
-            for page, text in pages
-            for booking, block in (_statement_bookings(text) if is_statement else ((None, text),))
-        )
-        for item in records:
+        for item in _document_receipts(document, pages):
             if item is None:
                 continue
             if item.kind == "refund" and item.issuer:

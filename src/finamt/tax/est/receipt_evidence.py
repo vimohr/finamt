@@ -59,6 +59,18 @@ _INSURANCE_AMOUNT = re.compile(
 _EURO = re.compile(r"(?:\b(?:EUR|Euro)\b|€)", re.IGNORECASE)
 
 
+def printed_date(token: str) -> date | None:
+    if not _DATE.fullmatch(token):
+        return None
+    try:
+        if "." in token:
+            day, month, year = map(int, token.split("."))
+            return date(year, month, day)
+        return date.fromisoformat(token)
+    except ValueError:
+        return None
+
+
 def payment_sources(excerpt: str) -> PaymentSources:
     """Find dates named in an affirmative statement of payment or reimbursement."""
     evidence: PaymentSources = {}
@@ -67,16 +79,8 @@ def payment_sources(excerpt: str) -> PaymentSources:
             dates = _DATE.findall(statement)
             if len(dates) != 1 or not _PAID.search(statement) or _NOT_PAID.search(statement):
                 continue
-            token = dates[0]
-            try:
-                if "." in token:
-                    day, month, year = map(int, token.split("."))
-                    paid_on = date(year, month, day)
-                else:
-                    paid_on = date.fromisoformat(token)
-            except ValueError:
-                continue
-            evidence.setdefault(paid_on, []).append(statement)
+            if paid_on := printed_date(dates[0]):
+                evidence.setdefault(paid_on, []).append(statement)
     return evidence
 
 
