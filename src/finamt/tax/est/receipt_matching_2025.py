@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -53,6 +54,11 @@ _PENDING = re.compile(
     r"(?:geplant|voraussichtlich)(?:e[nrsm]?)?)\b",
     re.IGNORECASE,
 )
+_BANK_STATEMENT = re.compile(r"^[ \t]*Kontoauszug\b", re.IGNORECASE | re.MULTILINE)
+_BOOKING = re.compile(
+    r"^[ \t]*Buchung[ \t]+(?:Nr\.?[ \t]*)?[0-9]+[ \t]*\r?$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 @dataclass(frozen=True)
@@ -100,7 +106,18 @@ def _one_field(fields: dict[str, list[tuple[str, str]]], names: tuple[str, ...])
     return next(iter(options.items())) if len(options) == 1 else ("", "")
 
 
-def _receipt(document: str, page: int | None, text: str) -> Receipt | None:
+def _statement_bookings(text: str) -> Iterator[tuple[str | None, str]]:
+    headings = list(_BOOKING.finditer(text))
+    if not headings:
+        yield None, text
+    for i, heading in enumerate(headings):
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(text)
+        yield heading[0].strip(), text[heading.end() : end]
+
+
+def _receipt(
+    document: str, page: int | None, text: str, booking: str | None = None
+) -> Receipt | None:
     fields = _fields(text)
     amounts = [
         (kind, value, quote)
@@ -138,7 +155,14 @@ def _receipt(document: str, page: int | None, text: str) -> Receipt | None:
             if proof:
                 paid_on, payment_quote = candidate, proof
 
-    quotes = (*reference_options.values(), issuer_quote, subject_quote, amount_quote, payment_quote)
+    quotes = (
+        booking,
+        *reference_options.values(),
+        issuer_quote,
+        subject_quote,
+        amount_quote,
+        payment_quote,
+    )
     source = SourceLocation(
         document=document,
         page=page,
@@ -227,8 +251,13 @@ def match_receipts(documents: dict[str, SourceDocument], originals: dict[str, by
                     "documents": [document],
                 }
             )
-        for page, text in pages:
-            item = _receipt(document, page, text)
+        is_statement = any(_BANK_STATEMENT.search(text) for _, text in pages)
+        records = (
+            _receipt(document, page, block, booking)
+            for page, text in pages
+            for booking, block in (_statement_bookings(text) if is_statement else ((None, text),))
+        )
+        for item in records:
             if item is None:
                 continue
             if item.kind == "refund" and item.issuer:

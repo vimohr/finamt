@@ -34,6 +34,19 @@ Empfänger: Ada Muster
 Erstattungsbetrag: 125,00 EUR
 Ausgezahlt am 30.04.2025.
 """
+STATEMENT = """Kontoauszug April 2025
+Buchung 1
+Buchungstag: 08.04.2025
+Empfänger: Andere Akademie
+Überwiesener Betrag: 390,00 EUR
+Verwendungszweck: Rechnung FB-2025-18
+
+Buchung 2
+Buchungstag: 10.04.2025
+Empfänger: Musterakademie
+Überwiesener Betrag: 390,00 EUR
+Verwendungszweck: Rechnung FB-2025-17
+"""
 
 
 def _pdf(*pages: str, scan: bool = False) -> bytes:
@@ -184,6 +197,44 @@ def test_invoice_reference_can_be_printed_in_bank_transfer_purpose(originals):
     assert (
         "Verwendungszweck: Rechnung FB-2025-17" in proposal["expense"]["payment_source"]["locator"]
     )
+
+
+def test_bank_statement_selects_the_referenced_booking_even_with_equal_amounts(originals):
+    title, _, bookings = STATEMENT.partition("\n")
+    originals["payment"] = ("kontoauszug.pdf", _pdf(title, bookings))
+    with TestClient(app) as client:
+        response = _match(client, originals)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["findings"] == []
+    (proposal,) = result["proposals"]
+    expense = proposal["expense"]
+    assert expense["paid_on"] == "2025-04-10"
+    assert expense["payment_source"]["document"] == "payment"
+    assert expense["payment_source"]["page"] == 2
+    assert "Buchung 2" in expense["payment_source"]["locator"]
+    assert "08.04.2025" not in expense["payment_source"]["locator"]
+
+
+@pytest.mark.parametrize(
+    ("statement", "question"),
+    [
+        (STATEMENT.replace("Buchungstag: 10.04.2025\n", ""), "tatsächliche Zahlungs-"),
+        (STATEMENT.replace("Empfänger: Musterakademie\n", ""), "Anbieter"),
+        (STATEMENT.replace("Rechnung FB-2025-18", "Rechnung FB-2025-17"), "Zahlungsbeleg gehört"),
+    ],
+)
+def test_bank_statement_does_not_combine_fields_from_different_bookings(
+    originals, statement, question
+):
+    originals["payment"] = ("kontoauszug.txt", statement.encode())
+    with TestClient(app) as client:
+        response = _match(client, originals)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["proposals"] == []
+    (finding,) = result["findings"]
+    assert question in finding["message"]
 
 
 def test_scan_reports_missing_text_and_hash_mismatch_stops_matching(originals):

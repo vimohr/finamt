@@ -84,7 +84,10 @@ def create_cases(output: Path) -> None:
     write_pdf(folder / "10-kontoauszug.pdf", sections["H"] + " Überwiesener Betrag 525,00 EUR.")
     write_pdf(
         folder / "11-fortbildung-zahlung.pdf",
-        "Zahlungsbeleg\nVerwendungszweck: Rechnung FB-2025-17\nEmpfänger: Musterakademie\n"
+        "Kontoauszug April 2025\n"
+        "Buchung 1\nVerwendungszweck: Rechnung FB-2025-18\nEmpfänger: Andere Akademie\n"
+        "Überwiesener Betrag: 390,00 EUR\nBuchungstag: 08.04.2025\n\n"
+        "Buchung 2\nVerwendungszweck: Rechnung FB-2025-17\nEmpfänger: Musterakademie\n"
         "Überwiesener Betrag: 390,00 EUR\nBuchungstag: 10.04.2025",
     )
 
