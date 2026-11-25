@@ -88,12 +88,12 @@ const categories = {
   },
 };
 const stageMessages = {
-  intake: "Beantworte die Fragen zur Steuersituation. Bei offenen Angaben zeige ich dir, was zu klären ist.",
-  documents: "Du kannst jeden Beleg hier ansehen und eine bereits gespeicherte Falldatei laden.",
-  payroll: "Wähle eine Bescheinigung aus. Ich schlage die erkannten Positionen vor. Prüfe sie neben dem Original, bevor du sie übernimmst.",
-  expenses: "Gehen wir die Werbungskosten durch. Hattest du Dienstreisen, Fortbildungskosten oder Ausgaben für Arbeitsmittel?",
-  profile: "Für die Jahresschätzung brauche ich noch die bestätigten Angaben zum Hauptvordruck und die Versicherungsart.",
-  review: "Jetzt gehe ich mit dir durch die Vorschau. Klicke auf einen Belegverweis, um die Zahl am Original nachzuvollziehen.",
+  intake: "Beantworte zuerst die Fragen zu deiner Steuersituation. Danach gehen wir deine Belege gemeinsam durch.",
+  documents: "Füge deine Lohnsteuerbescheinigungen und Belege hinzu. Jedes Original lässt sich hier öffnen.",
+  payroll: "Lies die Bescheinigungen aus und vergleiche Zeitraum und Beträge mit dem Original.",
+  expenses: "Du kannst Fortbildungsbelege gemeinsam abgleichen und einen Arbeitskalender für Pendel- und Homeoffice-Tage übernehmen.",
+  profile: "Ergänze deine persönlichen Angaben und deinen Versicherungsstatus für die Jahresschätzung.",
+  review: "Öffne bei einem Wert den Rechenweg, um die Eingaben und die Fundstellen zu prüfen.",
 };
 let taxCase = emptyCase();
 const originalFiles = new Map();
@@ -136,6 +136,7 @@ function say(message, author = "assistant") {
 }
 
 function changeStage(stage) {
+  const previous = activeStage;
   activeStage = stage;
   document.querySelectorAll("[data-sheet]").forEach((sheet) => {
     sheet.hidden = sheet.dataset.sheet !== stage;
@@ -145,7 +146,11 @@ function changeStage(stage) {
     else item.removeAttribute("aria-current");
   });
   notify("");
-  say(stageMessages[stage]);
+  if (previous !== stage) say(stageMessages[stage]);
+  const heading = document.querySelector('[data-sheet="' + stage + '"] h2');
+  heading.tabIndex = -1;
+  heading.focus({preventScroll: true});
+  document.querySelector(".top").scrollIntoView?.({block: "start"});
 }
 
 async function request(path, options) {
@@ -490,7 +495,11 @@ function label(key) {
 
 function formatted(entry) {
   if (entry.unit === "date") return String(entry.value).split("-").reverse().join(".");
-  if (entry.unit === "EUR") return String(entry.value).replace(".", ",") + " €";
+  if (entry.unit === "EUR") {
+    const [euros, cents] = String(entry.value).split(".");
+    const grouped = euros.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return (cents ? grouped + "," + cents : grouped) + " €";
+  }
   return String(entry.value) + ({km: " km", days: " Tage", "%": " %"}[entry.unit] ?? "");
 }
 
@@ -537,6 +546,18 @@ function showTrace(container, key) {
 
 function renderReview(data) {
   draft = data;
+  el("review-confirmed").hidden = true;
+  el("estimate-evidence").hidden = true;
+  el("estimate-evidence").replaceChildren();
+  el("estimate-trace").setAttribute("aria-expanded", "false");
+  const balance = data.assessment?.values.tax_balance;
+  el("tax-estimate").hidden = !balance;
+  if (balance) {
+    const amount = Number(balance.value);
+    el("estimate-label").textContent = amount < 0 ? "Voraussichtliche Erstattung"
+      : amount > 0 ? "Voraussichtliche Nachzahlung" : "Voraussichtlicher Steuersaldo";
+    el("estimate-value").textContent = formatted({...balance, value: String(balance.value).replace(/^-/, "")});
+  }
   reviewedSections.clear();
   walkthrough = [{
     title: "Werbungskosten und Arbeitslohn",
@@ -588,6 +609,7 @@ function renderWalk() {
   if (!step) return;
   reviewedSections.add(walkIndex);
   el("walk-heading").textContent = step.title;
+  el("walk-position").textContent = "Abschnitt " + (walkIndex + 1) + " von " + walkthrough.length;
   el("walk-intro").textContent = step.intro;
   el("walk-prev").disabled = walkIndex === 0;
   el("walk-next").disabled = walkIndex + 1 === walkthrough.length;
@@ -607,8 +629,20 @@ function renderWalk() {
     const value = row.insertCell();
     value.className = "amount";
     value.textContent = formatted(entry);
-    const trace = row.insertCell();
-    trace.append(button("Prüfen", () => showTrace(trace, entry.trace)));
+    const detailsRow = body.insertRow();
+    detailsRow.hidden = true;
+    detailsRow.className = "trace-row";
+    detailsRow.id = "walk-trace-" + body.rows.length;
+    const details = detailsRow.insertCell();
+    details.colSpan = 3;
+    const control = button("Prüfen", () => {
+      detailsRow.hidden = !detailsRow.hidden;
+      if (!detailsRow.hidden && !details.hasChildNodes()) details.append(traceDetails(entry.trace));
+      control.setAttribute("aria-expanded", String(!detailsRow.hidden));
+    });
+    control.setAttribute("aria-expanded", "false");
+    control.setAttribute("aria-controls", detailsRow.id);
+    row.insertCell().append(control);
   }
   el("walk-result").replaceChildren(table);
 }
@@ -656,12 +690,14 @@ request("intake").then((catalogue) => {
   intakeCatalogue = catalogue;
   for (const {key, prompt} of catalogue.questions) {
     const label = document.createElement("label");
-    label.textContent = prompt;
+    label.className = "intake-question";
+    const question = document.createElement("span");
+    question.textContent = prompt;
     const select = document.createElement("select");
     select.name = key;
     select.required = true;
-    select.append(new Option("Antwort wählen", ""), new Option("Ja", "yes"), new Option("Nein", "no"), new Option("Unsicher", "unsure"));
-    label.append(select);
+    select.append(new Option("Auswählen", ""), new Option("Ja", "yes"), new Option("Nein", "no"), new Option("Unsicher", "unsure"));
+    label.append(question, select);
     el("intake-questions").append(label);
   }
   el("scope-intake").querySelector('button[type="submit"]').disabled = false;
@@ -671,6 +707,12 @@ request("intake").then((catalogue) => {
 for (const item of document.querySelectorAll("[data-step], [data-next]")) {
   item.addEventListener("click", () => changeStage(item.dataset.step ?? item.dataset.next));
 }
+
+el("toggle-assistant").addEventListener("click", () => {
+  const expanded = el("assistant-body").toggleAttribute("data-expanded");
+  el("toggle-assistant").setAttribute("aria-expanded", String(expanded));
+  el("toggle-assistant").textContent = expanded ? "Einklappen" : "Chat öffnen";
+});
 
 for (const [position, title] of Object.entries(wagePositions)) {
   const label = document.createElement("label");
@@ -1031,6 +1073,7 @@ function updatePageOption() {
   el("chat-page-option").hidden = !visible;
   el("chat-page").hidden = !visible;
   el("chat-page").required = visible;
+  el("model-hint").textContent = el("use-guide").checked ? "Lokales Sprachmodell aktiv" : "Geführte Erfassung";
 }
 el("chat-document").addEventListener("change", updatePageOption);
 el("use-guide").addEventListener("change", updatePageOption);
@@ -1062,12 +1105,32 @@ el("calculate").addEventListener("click", () => run(el("calculate"), async () =>
   notify("");
   renderReview(result);
 }));
-el("walk-next").addEventListener("click", () => { walkIndex += 1; renderWalk(); say(walkthrough[walkIndex].intro); });
-el("walk-prev").addEventListener("click", () => { walkIndex -= 1; renderWalk(); });
+
+el("estimate-trace").addEventListener("click", () => {
+  const trace = draft?.assessment?.values.tax_balance?.trace;
+  if (!trace) return;
+  const evidence = el("estimate-evidence");
+  evidence.hidden = !evidence.hidden;
+  if (!evidence.hidden && !evidence.hasChildNodes()) evidence.append(traceDetails(trace));
+  el("estimate-trace").setAttribute("aria-expanded", String(!evidence.hidden));
+});
+
+function goToReviewSection(offset) {
+  walkIndex += offset;
+  renderWalk();
+  const heading = el("walk-heading");
+  heading.focus({preventScroll: true});
+  heading.scrollIntoView?.({block: "start"});
+  if (offset > 0) say(walkthrough[walkIndex].intro);
+}
+
+el("walk-next").addEventListener("click", () => goToReviewSection(1));
+el("walk-prev").addEventListener("click", () => goToReviewSection(-1));
 el("findings-reviewed").addEventListener("change", updateReviewConfirmation);
 el("review-confirm").addEventListener("click", () => {
   draft.user_reviewed = true;
   updateReviewConfirmation();
+  el("review-confirmed").hidden = false;
   say("Du hast alle Abschnitte durchgesehen. Der geprüfte Entwurf kann gespeichert werden.");
 });
 el("save-case").addEventListener("click", () => save("finamt-fall-2025.json", taxCase));
@@ -1081,7 +1144,6 @@ request("settings").then((data) => {
   el("use-guide").checked = data.guide;
   el("review-model-option").hidden = !data.reviewer;
   el("use-reviewer").checked = data.reviewer;
-  el("model-hint").textContent = data.guide ? "" : "Geführte Erfassung aktiv.";
   updatePageOption();
-}).catch(() => { el("model-hint").textContent = "Geführte Erfassung aktiv."; });
+}).catch(updatePageOption);
 changed();

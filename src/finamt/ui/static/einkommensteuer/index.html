@@ -9,11 +9,16 @@
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="/">finamt</a>
-    <span>Veranlagungsjahr 2025</span>
+    <div class="shell top-inner">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>finamt</a>
+      <button type="button" id="save-case">Falldatei speichern</button>
+    </div>
   </header>
-  <main>
-    <h1>Einkommensteuer</h1>
+  <main class="shell">
+    <div class="workspace-heading">
+      <h1>Einkommensteuer</h1>
+      <p class="tax-year">Steuerjahr <strong>2025</strong></p>
+    </div>
     <nav id="steps" aria-label="Steuerfall">
       <button type="button" data-step="intake" aria-current="step">Steuersituation</button>
       <button type="button" data-step="documents">Belege</button>
@@ -24,47 +29,68 @@
     </nav>
     <div class="desk">
       <aside class="panel assistant" aria-labelledby="guide-heading">
-        <h2 id="guide-heading">Steuerassistent</h2>
-        <div id="conversation" class="conversation" role="log" aria-live="polite">
-          <p class="turn">Wir klären zuerst deine Steuersituation für 2025. Danach gehen wir deine Belege und die dazu passenden Regeln durch.</p>
+        <div class="assistant-header">
+          <span class="assistant-mark" aria-hidden="true"></span>
+          <div>
+            <h2 id="guide-heading">Steuerassistent</h2>
+            <p id="model-hint">Geführte Erfassung</p>
+          </div>
+          <button class="assistant-toggle" id="toggle-assistant" type="button" aria-controls="assistant-body" aria-expanded="false">Chat öffnen</button>
         </div>
-        <form id="ask">
-          <label for="message">Nachricht an den Assistenten</label>
-          <textarea id="message" name="message" rows="3" maxlength="1600" placeholder="Welche Unterlagen brauche ich?"></textarea>
-          <label for="chat-document">Beleg zur Nachricht</label>
-          <select id="chat-document" name="document" data-doc-select></select>
-          <label id="chat-page-option" for="chat-page" hidden>Seite im PDF</label>
-          <input id="chat-page" name="page" type="number" min="1" step="1" value="1" hidden>
-          <label class="checkbox" id="model-option" hidden><input type="checkbox" id="use-guide"> Lokales Sprachmodell verwenden</label>
-          <p id="model-hint" class="muted"></p>
-          <button class="action" type="submit">Senden</button>
-        </form>
-        <div class="buttons" id="candidate-controls" hidden>
-          <button id="candidate-original" type="button">Fundstelle ansehen</button>
-          <button id="accept-candidate" type="button">Vorschlag nach Prüfung übernehmen</button>
+        <div id="assistant-body" class="assistant-body">
+          <div id="conversation" class="conversation" role="log" aria-label="Gespräch mit dem Steuerassistenten">
+            <p class="turn">Beantworte zuerst die Fragen zu deiner Steuersituation. Danach gehen wir deine Belege gemeinsam durch.</p>
+          </div>
+          <div class="buttons candidate-controls" id="candidate-controls" hidden>
+            <button id="candidate-original" type="button">Fundstelle ansehen</button>
+            <button id="accept-candidate" class="action" type="button">Vorschlag übernehmen</button>
+          </div>
+          <form id="ask">
+            <div class="composer">
+              <label class="visually-hidden" for="message">Nachricht an den Assistenten</label>
+              <textarea id="message" name="message" rows="2" maxlength="1600" placeholder="Welche Unterlagen brauche ich?"></textarea>
+              <div class="composer-actions">
+                <label class="visually-hidden" for="chat-document">Beleg zur Nachricht</label>
+                <select id="chat-document" name="document" data-doc-select></select>
+                <button class="action" type="submit">Senden</button>
+              </div>
+            </div>
+            <div class="composer-page">
+              <label id="chat-page-option" for="chat-page" hidden>Seite im PDF</label>
+              <input id="chat-page" name="page" type="number" min="1" step="1" value="1" hidden>
+            </div>
+            <label class="checkbox" id="model-option" hidden><input type="checkbox" id="use-guide"> Lokales Sprachmodell verwenden</label>
+          </form>
         </div>
       </aside>
       <div class="panel sheets">
         <div class="notice" id="notice" role="status" hidden></div>
         <section data-sheet="intake">
-          <h2>Deine Steuersituation 2025</h2>
-          <p>Wähle „Unsicher“, wenn eine Angabe offen ist. Der Fall bleibt bearbeitbar, während du die Frage klärst.</p>
+          <h2>Steuersituation</h2>
+          <p class="section-intro">Wähle „Unsicher“, wenn eine Angabe noch offen ist.</p>
           <form id="scope-intake">
-            <div id="intake-questions" class="split"></div>
-            <label>Wie viele gültige Lohnsteuerbescheinigungen liegen vor?
-              <input name="wage_count" type="number" min="1" max="50" step="1" placeholder="Feld leer lassen, falls unklar">
+            <div id="intake-questions"></div>
+            <label class="intake-question">
+              <span>Wie viele gültige Lohnsteuerbescheinigungen liegen vor?</span>
+              <input name="wage_count" type="number" min="1" max="50" step="1" placeholder="Falls bekannt">
             </label>
-            <button class="action next" type="submit" disabled>Antworten prüfen</button>
+            <p id="intake-status" role="status"></p>
+            <ul id="intake-findings"></ul>
+            <div class="section-actions">
+              <button class="action" type="submit" disabled>Antworten prüfen</button>
+              <button type="button" data-next="documents">Zu den Belegen</button>
+            </div>
           </form>
-          <p id="intake-status" role="status"></p>
-          <ul id="intake-findings"></ul>
-          <button type="button" class="next" data-next="documents">Zu den Belegen</button>
         </section>
         <section data-sheet="documents" hidden>
           <h2>Originalbelege</h2>
-          <p>Wähle die Dateien aus. Sie bleiben für diesen Fall im Browser verfügbar.</p>
-          <label class="file-picker" for="originals">PDFs, Bilder und Textbelege auswählen</label>
-          <input id="originals" type="file" accept=".pdf,.txt,.csv,.png,.jpg,.jpeg" multiple>
+          <p class="section-intro">Die Originale bleiben in diesem Fenster verfügbar, bis du es schließt.</p>
+          <div class="upload">
+            <span class="upload-mark" aria-hidden="true"></span>
+            <p id="original-formats">PDF, PNG, JPG, TXT und CSV</p>
+            <input id="originals" class="visually-hidden" type="file" accept=".pdf,.txt,.csv,.png,.jpg,.jpeg" multiple aria-describedby="original-formats">
+            <label class="file-picker action" for="originals">Belege auswählen</label>
+          </div>
           <ul id="documents" class="documents"></ul>
           <details>
             <summary>Vorhandenen Fall laden</summary>
@@ -82,7 +108,7 @@
               <label class="checkbox"><input type="checkbox" name="ocr"> Scan mit lokaler OCR lesen</label>
             </div>
             <div class="buttons">
-              <button type="submit" class="action">Vorschlag aus PDF erstellen</button>
+              <button type="submit" class="action">Bescheinigung auslesen</button>
               <button type="button" id="payroll-manual">Manuell erfassen</button>
             </div>
           </form>
@@ -99,7 +125,7 @@
               <label>PDF-Seite<input name="page" type="number" min="1" step="1"></label>
             </div>
             <div id="wage-amounts" class="split"></div>
-            <button type="submit" class="action">Am Original geprüft und bestätigen</button>
+            <button type="submit" class="action">Geprüfte Angaben übernehmen</button>
           </form>
           <ul id="wages" class="documents"></ul>
           <button type="button" class="action next" data-next="expenses">Zu den Ausgaben</button>
@@ -270,8 +296,8 @@
           <button type="button" class="action next" data-next="profile">Zum Hauptvordruck</button>
         </section>
         <section data-sheet="profile" hidden>
-          <h2>Hauptvordruck und Jahresschätzung</h2>
-          <p>Dieser Berechnungsumfang gilt für die Einzelveranlagung eines in Deutschland ansässigen Arbeitnehmers ohne Kinder und ohne andere Einkünfte.</p>
+          <h2>Hauptvordruck</h2>
+          <p class="section-intro">Für die Jahresschätzung brauchen wir deine persönlichen Angaben und deinen Versicherungsstatus.</p>
           <form id="profile">
             <div class="split">
               <label>Vorname<input name="first_name" required></label>
@@ -309,42 +335,55 @@
           <button type="button" class="next" data-next="review">Zur Übersicht</button>
         </section>
         <section data-sheet="review" hidden>
-          <h2>Übersicht und zweite Prüfung</h2>
-          <p>Der Assistent führt dich durch die berechneten Werte und die vorbereiteten Anlagen.</p>
+          <h2>Steuererklärung prüfen</h2>
           <label class="checkbox" id="review-model-option" hidden><input type="checkbox" id="use-reviewer"> Zweites lokales Sprachmodell zur Prüfung einsetzen</label>
-          <div class="buttons">
-            <button type="button" class="action" id="calculate">Vorschau berechnen und prüfen</button>
+          <div class="buttons review-actions">
+            <button type="button" class="action" id="calculate">Vorschau erstellen</button>
             <button type="button" id="save-draft" disabled>Prüfentwurf speichern</button>
           </div>
           <div id="review-output" aria-live="polite" hidden>
-            <h3>Prüfpunkte</h3>
-            <p id="review-agent" class="muted"></p>
-            <ul id="findings"></ul>
-            <label class="checkbox" id="acknowledge-findings" hidden><input type="checkbox" id="findings-reviewed"> Ich habe die Prüfpunkte mit meinen Belegen abgeglichen</label>
-            <h3 id="walk-heading"></h3>
-            <p id="walk-intro"></p>
-            <div id="walk-result"></div>
-            <div class="buttons">
-              <button type="button" id="walk-prev">Zurück</button>
-              <button type="button" class="action" id="walk-next">Weiter</button>
-              <button type="button" id="review-confirm" disabled>Übersicht als geprüft bestätigen</button>
+            <div id="tax-estimate" class="tax-estimate" hidden>
+              <div class="estimate-summary">
+                <div>
+                  <p id="estimate-label"></p>
+                  <strong id="estimate-value"></strong>
+                </div>
+                <button type="button" id="estimate-trace" aria-controls="estimate-evidence" aria-expanded="false">Rechenweg</button>
+              </div>
+              <div id="estimate-evidence" hidden></div>
             </div>
+            <div class="review-checks">
+              <h3>Prüfpunkte</h3>
+              <p id="review-agent" class="muted"></p>
+              <ul id="findings"></ul>
+              <label class="checkbox" id="acknowledge-findings" hidden><input type="checkbox" id="findings-reviewed"> Ich habe die Prüfpunkte mit meinen Belegen abgeglichen</label>
+            </div>
+            <div class="walk-header">
+              <h3 id="walk-heading" tabindex="-1"></h3>
+              <p id="walk-position" class="walk-position"></p>
+            </div>
+            <p id="walk-intro" class="muted"></p>
+            <div id="walk-result"></div>
+            <div class="section-actions">
+              <button type="button" id="walk-prev">Zurück</button>
+              <button type="button" id="walk-next">Weiter</button>
+              <button type="button" class="action" id="review-confirm" disabled>Als geprüft bestätigen</button>
+            </div>
+            <p id="review-confirmed" class="notice" role="status" hidden>Die Übersicht ist geprüft.</p>
           </div>
         </section>
         <details id="advanced">
-          <summary>Erweiterte Angaben und Falldatei</summary>
-          <p>Hier kannst du alle Felder des lokalen Falls bearbeiten und sichern.</p>
-          <label for="case-json">Bestätigte Falldaten (JSON)</label>
+          <summary>Erweiterte Falldaten</summary>
+          <label for="case-json">Falldaten (JSON)</label>
           <textarea id="case-json" rows="12" spellcheck="false"></textarea>
           <div class="buttons">
             <button type="button" id="apply-json">Bearbeitete Angaben übernehmen</button>
-            <button type="button" id="save-case">Falldatei speichern</button>
           </div>
         </details>
       </div>
     </div>
   </main>
-  <dialog id="original-dialog">
+  <dialog id="original-dialog" aria-labelledby="original-title">
     <form method="dialog" class="dialog-header">
       <h2 id="original-title">Originalbeleg</h2>
       <button>Schließen</button>
